@@ -116,13 +116,19 @@ class Pipeline:
 		self.corpus = {}
 
 	def listAcquirers(self):
+		""" Returns list of currently registered acquirers """
+
 		return self.acquire.keys()
 
 	def addAcquire(self, acquirer, tag):
+		""" Add a new acquirer tagged 'tag' """
+
 		print "Adding acquirer '{0}'.".format(tag)
 		self.acquire[tag] = acquirer
 
 	def removeAcquire(self, tag):
+		""" Remove the acquirer tagged 'tag' """
+
 		if self.acquire.has_key(tag):
 			print "Deleting acquirer '{0}'.".format(tag)			
 			del self.acquire[tag]
@@ -130,13 +136,19 @@ class Pipeline:
 			print "No acquirer '{0}'.".format(tag)
 
 	def listMiners(self):
+		""" Returns list of currently registered data miners """
+
 		return self.mine.keys()
 
 	def addMiner(self, miner, tag):
+		""" Add a new data miner tagged 'tag' """
+
 		print "Adding miner '{0}'.".format(tag)
 		self.mine[tag] = miner
 
 	def removeMiner(self, tag):
+		""" Remove the data miner tagged 'tag' """
+
 		if self.mine.has_key(tag):
 			print "Deleting miner '{0}'.".format(tag)			
 			del self.acquire[tag]
@@ -144,14 +156,20 @@ class Pipeline:
 			print "No miner '{0}'.".format(tag)
 
 	def listSearch(self):
+		""" Returns list of currently registered search engines """
+
 		return self.search.keys()
 
 
 	def addSearch(self, search, tag):
+		""" Add a new search engine tagged 'tag' """
+
 		print "Adding search '{0}'.".format(tag)
 		self.search[tag] = search
 
 	def removeSearch(self, tag):
+		""" Remove the search engine tagged 'tag' """
+
 		if self.search.has_key(tag):
 			print "Deleting search '{0}'.".format(tag)			
 			del self.search[tag]
@@ -159,7 +177,10 @@ class Pipeline:
 			print "No search '{0}'.".format(tag)
 
 	def performSearch(self, corpusTag, searchTag, searchTerms):
-		print "Performing search on {0} with {1}, terms '{2}'".format(corpusTag, searchTag, searchTerms)
+		""" Perform a search on a given corpus with a given search engine, using searchterms
+			Returns a list of results """
+
+		print "Performing search on corpus '{0}' with engine '{1}', terms '{2}'".format(corpusTag, searchTag, searchTerms)
 
 		if not self.search.has_key(searchTag):
 			print "No search '{0}' available.".format(searchTag)
@@ -172,10 +193,14 @@ class Pipeline:
 		return self.search[searchTag].performSearch(self.corpus[corpusTag], searchTerms)
 
 	def acquireAndBuildCorpus(self, acquireTag, minerTag, corpusTag, *acquireArgs):
+		""" Acquire input and generate a corpus from it with a given miner in one step """
+
 		print acquireArgs
 		buildCorpus(corpusTag, minerTag, acquire[acquireTag].acquire(*acquireArgs))
 
 	def buildCorpus(self, minerTag, corpusTag, data):
+
+		""" Generate a corpus from a given dataset using a given miner """
 		self.corpus[corpusTag] = self.mine[minerTag].buildCorpus(data)
 		
 
