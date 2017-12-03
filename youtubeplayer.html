@@ -177,14 +177,17 @@
         var dropDown = document.getElementById('types');
         var timelineValue = dropDown.value;
 
-        if(timelineValue == "default") return;
+        if (
+            ((timelineValue in depScrub) && (depScrub[timelineValue] != undefined)) ||
+            (timelineValue == "default")
+        ) return;
 
         var timelineName = "";
 
         dropDown.childNodes.forEach( // Disable a given timeline option once added.
           function(current) {
             if (current.value == timelineValue) {
-              current.setAttribute('disabled', 'true');
+              //current.setAttribute('disabled', 'true');
               timelineName = current.innerHTML;
             }
           }
@@ -197,7 +200,7 @@
 
         var id = depScrub.length;
   
-        frame.innerText = timelineName;
+        frame.innerHTML = timelineName + "(<a href='javascript: removeTimeline(\"tl_" + timelineValue + "\")'>Remove this timeline</a>)";
 
         scrubber.setAttribute('id', 'depscrubber' + id);
         scrubber.setAttribute('class', 'dependentScrubber');
@@ -205,7 +208,7 @@
         newTimeline.setAttribute('class', 'dependentTimeline');
 
         frame.setAttribute('class', 'timelineFrame');
-        frame.setAttribute('id', timelineValue);
+        frame.setAttribute('id', 'tl_' + timelineValue);
 
         newTimeline.appendChild(scrubber);
         frame.appendChild(newTimeline);
@@ -217,6 +220,20 @@
         startTest = Math.random() * 180;
         endTest = Math.random() * 180 + 180;
         addResultToTimeline(depScrub[timelineValue].tl, startTest, endTest, 'searchtermname');
+      }
+
+      function removeTimeline(timelineName) {
+        tlRoot = timelineName.substr(3, timelineName.length-3);
+        tl = document.getElementById(timelineName);
+
+        console.log("Unregistered timeline " + tlRoot);
+        delete depScrub[tlRoot];
+
+        while (tl.firstChild) {
+          tl.removeChild(tl.firstChild);
+        }
+
+        tl.parentNode.removeChild(tl);
       }
 
       function addResultToTimeline(tl, start, end, tag, colour = "#FFDD00") {
@@ -240,6 +257,8 @@
       // REST functionality
 
       function getTimelineTypes() {
+        // report data mining functions available in backend
+
         var capabilities = ["spoken", "visibletext", "scenecontents"];
         var names = ["Spoken Text", "Written text", "Objects in scene"]; 
 
@@ -250,7 +269,14 @@
           newOption.innerText = names[i];
           types.appendChild(newOption);
         }
+      }
 
+      function getResults(timeline) {
+        // Check for readiness, if ready, read results. If not, flag unready.
+      }
+
+      function triggerDatamine(timeline) {
+        // notify backend that a given data mining method has been requested
       }
 
     </script>
