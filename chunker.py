@@ -1,7 +1,9 @@
-from pattern.en import parse, pprint
 import re
 
 class SRTChunk:
+	""" Defines a Chunk of an SRT file - some content that exists between
+		a startTime and an endTime """
+
 	def __init__(self):
 		self.content = []
 		startTime = 0
@@ -12,21 +14,23 @@ class SRTChunk:
 		
 
 class SRTChunker:
+	""" Takes a .srt subtitle file and converts it into an array of Chunks and
+		a reverse-indexed lookup table by whole words """
+
 	file = 0
 	chunks = []
 
 	words = {}
 
 	def __init__(self, filename):
-		file = open(filename, "r")
+		""" Reads provided file, chunks it and runs tagWords on each chunk """
 
-		line = file.readline().strip()
 		with open(filename, "r") as file:
 			chunk = None
-			identifier = True
+			identifier = True # sentinel for skipping Identifier lines
 		
 			for line in file:
-				line = line.strip()
+				line = line.strip() # trims leading/trailing whitespace etc.
 
 				# strip out HTML-style codes
 				line = re.sub(r"<.+>", "", line)
@@ -51,6 +55,9 @@ class SRTChunker:
 					identifier = True
 
 	def timestampToSeconds(self, timestamp):
+		""" Takes a timestamp in .srt (hh:mm:ss,mmm) format and
+			converts it to a (float) number of seconds """
+
 		timestamp, millis = timestamp.split(",")
 		stamp = map(int, timestamp.split(":"))
 		
@@ -63,8 +70,9 @@ class SRTChunker:
 
 		for word in chunk.getFullText().split(" "):
 			
-			# isolate actual word
+			# isolate actual word - no punctuation on either side
 			tmp = re.search("([A-Za-z']+)", word)
+
 			if tmp:
 				word = tmp.group(1)
 
@@ -73,8 +81,4 @@ class SRTChunker:
 			if not self.words.has_key(word):
 				self.words[word] = []
 			self.words[word].append(chunk)
-
-	def nextChunk():
-		pass
-
 
