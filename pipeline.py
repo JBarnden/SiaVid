@@ -55,6 +55,15 @@ class DataMiner:
 		self.data = someData;
 
 	def buildCorpus(self, data):
+		
+		self.status = 1
+		# TODO: calls build in a separate thread
+		corpus = self.build(data)
+		self.status = 0
+
+		return corpus
+
+	def build(self, data):
 		corpus = [] # Holds processed data
 		
 		corpus.append(data) # Processing here
@@ -62,8 +71,7 @@ class DataMiner:
 		return corpus
 
 	def checkStatus(self):
-		# Currently does nothing useful - see class TODO
-		return "READY"
+		return self.status
 
 class DataMinerAdapter:
 	""" Holds a DataMiner and mediates requests to it """

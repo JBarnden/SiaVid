@@ -4,7 +4,7 @@ class SplitDataMiner(DataMiner):
 	""" Example DataMiner that splits raw input data at occurences
 		of 'e' """
 
-	def buildCorpus(self, data):
+	def build(self, data):
 		results = []
 		for item in data:
 			halves = item.split('e')
