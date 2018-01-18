@@ -1,6 +1,3 @@
-from chunker import SRTChunk, SRTChunker
-
-
 class Acquirer:
 	""" Basic definition for data acquisition class """
 
@@ -20,20 +17,6 @@ class AcquirerAdapter:
 
 	def acquire(self, *args):
 		return self.acquirer.acquire(*args)
-
-class ReadFileAcquirer(Acquirer):
-	""" Example Acquirer that reads from a given filename into a list """
-
-	def __init__(self, filename):
-		self.filename = filename
-
-	def acquire(self):
-		lines = []
-
-		with open(self.filename, "r") as file:
-			lines = file.readlines()
-
-		return lines
 
 class SearchEngine:
 	""" Basic definition for SearchEngine class """
@@ -57,26 +40,19 @@ class SearchAdapter:
 	def performSearch(self, corpus, terms):
 		return self.engine.performSearch(corpus, terms)
 
-class SearchInFirstLine(SearchEngine):
-	""" Example SearchEngine that finds the first instance of a given
-		substring in the first element of the corpus provided """
-
-	def performSearch(self, corpus, terms):
-		""" Simple example search: Finds substring 'terms' in first
-			line of corpus """
-
-		result = [] # holds search results
-
-		result.append(corpus[0].find(terms))
-
-		return result
 
 class DataMiner:
 	""" Basic definition for DataMiner class """
 
+	# TODO: Make this run corpus-building in a separate thread
+	#       and provide a checkStatus() method for testing if
+	#       it's complete
+
+	def __init__(self):
+		self.status = 0
+
 	def provideRawData(self, someData):
 		self.data = someData;
-		pass
 
 	def buildCorpus(self, data):
 		corpus = [] # Holds processed data
@@ -84,6 +60,10 @@ class DataMiner:
 		corpus.append(data) # Processing here
 
 		return corpus
+
+	def checkStatus(self):
+		# Currently does nothing useful - see class TODO
+		return "READY"
 
 class DataMinerAdapter:
 	""" Holds a DataMiner and mediates requests to it """
@@ -94,18 +74,9 @@ class DataMinerAdapter:
 	def buildCorpus(self, data):
 		return self.miner.buildCorpus(data)
 
+	def checkStatus(self):
+		return self.miner.checkStatus()
 
-class SplitDataMiner(DataMiner):
-	""" Example DataMiner that splits raw input data at occurences
-		of 'e' """
-
-	def buildCorpus(self, data):
-		results = []
-		for item in data:
-			halves = item.split('e')
-			results.append(halves[0])
-			results.append(halves[1])
-		return results
 
 class Pipeline:
 	def __init__(self):
@@ -130,7 +101,7 @@ class Pipeline:
 		""" Remove the acquirer tagged 'tag' """
 
 		if self.acquire.has_key(tag):
-			print "Deleting acquirer '{0}'.".format(tag)			
+			print "Deleting acquirer '{0}'.".format(tag)
 			del self.acquire[tag]
 		else:
 			print "No acquirer '{0}'.".format(tag)
@@ -150,7 +121,7 @@ class Pipeline:
 		""" Remove the data miner tagged 'tag' """
 
 		if self.mine.has_key(tag):
-			print "Deleting miner '{0}'.".format(tag)			
+			print "Deleting miner '{0}'.".format(tag)
 			del self.acquire[tag]
 		else:
 			print "No miner '{0}'.".format(tag)
@@ -171,7 +142,7 @@ class Pipeline:
 		""" Remove the search engine tagged 'tag' """
 
 		if self.search.has_key(tag):
-			print "Deleting search '{0}'.".format(tag)			
+			print "Deleting search '{0}'.".format(tag)
 			del self.search[tag]
 		else:
 			print "No search '{0}'.".format(tag)
@@ -195,7 +166,7 @@ class Pipeline:
 	def acquireAndBuildCorpus(self, acquireTag, minerTag, corpusTag, *acquireArgs):
 		""" Acquire input and generate a corpus from it with a given miner in one step """
 
-		print acquireArgs
+		print acquireArgs 
 		buildCorpus(corpusTag, minerTag, acquire[acquireTag].acquire(*acquireArgs))
 
 	def buildCorpus(self, minerTag, corpusTag, data):
@@ -204,89 +175,8 @@ class Pipeline:
 		self.corpus[corpusTag] = self.mine[minerTag].buildCorpus(data)
 		
 
-
-### testing ###
-
-pipe = Pipeline()
-
-print ""
-
-
-print "### Register and test a data miner that just splits input on 'e':"
-print ""
-
-
-pipe.addMiner(DataMinerAdapter(SplitDataMiner()), 'test')
-
-pipe.buildCorpus('test', 'test', ["test"])
-print pipe.corpus['test']
-print ""
-
-
-# Component management
-
-print "### Add a ReadFileAcquirer and check for existence,, test it provides correct data, delete and check for non-existence:"
-print ""
-
-
-# Add a ReadFileAcquirer acquisition module
-pipe.addAcquire(AcquirerAdapter(ReadFileAcquirer("Inception.srt")), "test")
-
-print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer added correctly
-
-# Acquire data, test it's been returned correctly
-print "Line 208:", pipe.acquire["test"].acquire()[208]
-
-pipe.removeAcquire("test")		# remove acquirer
-print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer removed correctly
-
-print ""
-
-
-# Testing searching with a given corpus, Search and terms
-
-print "### Add a Test corpus, Attempt to use a non-existent SearchEngine to search it, then add a FirstLineSearch, enumerate to check existence, and use that instead."
-print ""
-
-
-print "adding 'Test' corpus"
-pipe.corpus['Test'] = ["This is a first line"]
-
-
-# Searching with missing chunks:
-pipe.performSearch("Test", "thing", "e")
-
-# add a search method
-pipe.addSearch(SearchAdapter(SearchInFirstLine()), "firstline")
-print "Current Searches:", pipe.listSearch()
-
-# Add a test corpus and search within it using the search method tagged 'firstline'
-result = pipe.performSearch("Test", "firstline", "e")
-print "Result:", result
-
-
-
-# End-to-end, example calls:
-
-"""
-
-pipe = Pipeline()
-
-filename = 'somefile'
-
-pipe.addAcquirer(AcquirerAdaptor(ReadFileAcquirer(filename)), 'readfile')
-pipe.addDataMiner(MinerAdaptor(ConvertToChunksMiner(), 'chunkify')
-pipe.addSearch(SearchAdaptor(FindChunkSearch(), 'chunkSearch')
-
-# use the readfile acquirer to read Inception.srt, process it into a search corpus with the chunkify data miner and store it in 'spokenword'.
-
-pipe.acquireAndBuildCorpus('readfile', 'chunkify', 'spokenword', 'Inception.srt')
-
-# Now we can search the spokenword corpus with the chunkSearch search engine and provided search terms...
-
-results = pipe.performSearch('spokenword', 'chunkSearch', "Hello")
-
-# And pass results out to our GUI or whatever.
-
-
-"""
+	def reportStatus(self):
+		print len(self.acquire), "Acquirers registered:", self.listAcquirers()
+		print len(self.mine), "Data Miners registered:", self.listMiners()
+		print len(self.search), "Search Engines registered:", self.listSearch()
+		print len(self.corpus), "corpuses registered:", self.corpus.keys()
