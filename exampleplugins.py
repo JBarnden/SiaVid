@@ -36,20 +36,30 @@ class SearchInFirstLine(SearchEngine):
 class ReadFileAcquirer(Acquirer):
 	""" Example Acquirer that reads from a given filename into a list """
 
-	def __init__(self, filename):
-		self.filename = filename
-
-	def acquire(self):
+	def acquire(self, filename):
 		lines = []
-
-		with open(self.filename, "r") as file:
+		
+		with open(filename, "r") as file:
 			lines = file.readlines()
 
 		return lines
 
 ###################################################################################
 
-import youtube-dl
+class PassThroughAcquirer(Acquirer):
+	""" Copies the file to ./tmp and returns path of new file """
+
+	def acquire(self, filename):
+		workingCopy = "./tmp/" + filename
+		with open(workingCopy, 'w') as outfile:
+			with open(filename, 'r') as infile:
+				lines = infile.readlines()
+				for line in lines:
+					outfile.write(line)
+
+		return "./tmp/" + filename
+
+import youtube_dl
 
 class YoutubeSRTAcquirer(Acquirer):
 	def __init__(self):
@@ -66,7 +76,7 @@ class YoutubeSRTAcquirer(Acquirer):
 		subfilename = ''
 
 		with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
-    		ydl.download(url)
+			ydl.download(url)
 			
 		subfilename = url.split("=")[1]
 		print subfilename
@@ -76,39 +86,38 @@ import re
 from chunker import SRTChunk
 
 class SRTChunkMiner(DataMiner):
-	""" Takes a filename, returns a dict lists of chunks, indexed by word """
+	""" Takes a filename, returns a dict of lists of chunks, indexed by word """
 
 	def build(self, data):
 		words = {}
 		chunks = []
 
-		with open(data, "r") as file:
-			chunk = None
-			identifier = True # sentinel for skipping Identifier lines
+		chunk = None
+		identifier = True # sentinel for skipping Identifier lines
 		
-			for line in file:
-				line = line.strip() # trims leading/trailing whitespace etc.
+		for line in data:
+			line = line.strip() # trims leading/trailing whitespace etc.
 
-				# strip out HTML-style codes
-				line = re.sub(r"<.+>", "", line)
+			# strip out HTML-style codes
+			line = re.sub(r"<.+>", "", line)
 
-				if ("-->" in line):
-					if chunk:			# if we have an existing chunk, save it...
-						self.tagWords(chunk, words)	# Add chunk reference to words in chunk
-						chunks.append(chunk)
+			if ("-->" in line):
+				if chunk:			# if we have an existing chunk, save it...
+					self.tagWords(chunk, words)	# Add chunk reference to words in chunk
+					chunks.append(chunk)
 
-					chunk = SRTChunk()		# ... and make a new one
+				chunk = SRTChunk()		# ... and make a new one
 
-					chunk.startTime, chunk.endTime = map(self.timestampToSeconds, line.split(" --> "))
+				chunk.startTime, chunk.endTime = map(self.timestampToSeconds, line.split(" --> "))
 
-				elif identifier == True: 		# skip message identifier lines following blank lines
-					identifier = False
+			elif identifier == True: 		# skip message identifier lines following blank lines
+				identifier = False
 
-				elif line != "":			# append line to content
-					chunk.content.append(line)
+			elif line != "":			# append line to content
+				chunk.content.append(line)
 
-				else:					# blank line found, skip next identifier line
-					identifier = True
+			else:					# blank line found, skip next identifier line
+				identifier = True
 		return words
 
 	def timestampToSeconds(self, timestamp):
@@ -150,8 +159,19 @@ from trie import Trie, TrieNode
 class SRTTrieMiner(DataMiner):
 	def build(self, data):
 
+		# build list of actual lines for chunking
+		lines = []
+		
+		with open(data, "r") as file:
+			lines = file.readlines()
+
+		# get our dict of word-indexed chunklists
+		chunker = SRTChunkMiner()
+		words = chunker.build(lines)
+
+		# build a trie from chunklists
 		trie = Trie()
-		for word in data.keys():
+		for word in words:
 			if word != '':
 				target = trie.getSubtree(word)
 				if target == None:
@@ -160,7 +180,7 @@ class SRTTrieMiner(DataMiner):
 				else:
 					target = target.root
 
-				for item in data[word]:
+				for item in words[word]:
 					target.content.append(item)
 
 		return trie
@@ -179,7 +199,7 @@ class TrieSearch(SearchEngine):
 			self.walkTrie(node.children[child], results)
 
 
-	def search(self, corpus, terms):
+	def performSearch(self, corpus, terms):
 		""" For each search term, get the trie rooted at it add children to results  """
 
 		results = Set() # only want unique results

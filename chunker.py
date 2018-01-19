@@ -6,8 +6,8 @@ class SRTChunk:
 
 	def __init__(self):
 		self.content = []
-		startTime = 0
-		endTime = 0
+		self.startTime = 0
+		self.endTime = 0
 
 	def getFullText(self):
 		return " ".join(self.content)
