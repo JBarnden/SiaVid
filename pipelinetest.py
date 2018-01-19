@@ -1,83 +1,91 @@
 from pipeline import *
 from exampleplugins import *
 
-if (True):
+### Basic test
 
-    pipe = Pipeline()
+pipe = Pipeline()
 
-    print ""
+print ""
 
-    print "### Register and test a data miner that just splits input on 'e':"
-    print ""
+print "### Register and test a data miner that just splits input on 'e':"
+print ""
 
-    pipe.addMiner(DataMinerAdapter(SplitDataMiner()), 'test')
+pipe.addMiner(DataMinerAdapter(SplitDataMiner()), 'test')
 
-    pipe.buildCorpus('test', 'test', ["test"])
-    print pipe.corpus['test']
-    print ""
+pipe.rawData['test'] = ["test"]
+print pipe.rawData['test']
 
-    # Component management
+pipe.buildCorpus('test', 'test', 'test')
+print pipe.corpus['test']
+print ""
 
-    print "### Add a ReadFileAcquirer and check for existence,, test it provides correct data, delete and check for non-existence:"
-    print "" 
+# Component management
 
-    # Add a ReadFileAcquirer acquisition module
-    pipe.addAcquire(AcquirerAdapter(ReadFileAcquirer("Inception.srt")), "test")
+print "### Add a ReadFileAcquirer and check for existence, test it provides correct data, delete and check for non-existence:"
+print "" 
 
-    print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer added correctly
+# Add a ReadFileAcquirer acquisition module
+pipe.addAcquirer(AcquirerAdapter(ReadFileAcquirer()), 'test')
+print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer added correctly
 
-    # Acquire data, test it's been returned correctly
-    print "Line 208:", pipe.acquire["test"].acquire()[208]
+# Acquire data, test it's been returned correctly
+pipe.performAcquire('test', './Inception.srt')
+print len(pipe.rawData['test'])
+print "Line 208:", pipe.rawData['test'][208]
 
-    pipe.removeAcquire("test")		# remove acquirer
-    print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer removed correctly
+pipe.removeAcquirer("test")		# remove acquirer
+print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer removed correctly
 
-    print ""
+print ""
 
-    # Testing searching with a given corpus, Search and terms
+# Testing searching with a given corpus, Search and terms
 
-    print "### Add a Test corpus, Attempt to use a non-existent SearchEngine to search it, then add a FirstLineSearch, enumerate to check existence, and use that instead."
-    print ""
+print "### Add a Test corpus, Attempt to use a non-existent SearchEngine to search it, then add a FirstLineSearch, enumerate to check existence, and use that instead."
+print ""
 
 
-    print "adding 'Test' corpus"
-    pipe.corpus['Test'] = ["This is a first line"]
+print "adding 'Test' corpus"
+pipe.corpus['Test'] = ["This is a first line"]
 
-    # Searching with missing chunks:
-    pipe.performSearch("Test", "thing", "e")
+# Searching with missing chunks:
+pipe.performSearch("Test", "thing", "e")
 
-    # add a search method
-    pipe.addSearch(SearchAdapter(SearchInFirstLine()), "firstline")
-    print "Current Searches:", pipe.listSearch()
+# add a search method
+pipe.addSearch(SearchAdapter(SearchInFirstLine()), "firstline")
+print "Current Searches:", pipe.listSearch()
 
-    # Add a test corpus and search within it using the search method tagged 'firstline'
-    result = pipe.performSearch("Test", "firstline", "e")
-    print "Result:", result
+# Add a test corpus and search within it using the search method tagged 'firstline'
+result = pipe.performSearch("Test", "firstline", "e")
+print "Result:", result
 
-    pipe.reportStatus()
+pipe.reportStatus()
 
-else:
-    """
-    # End-to-end, example calls:
-    from exampleplugins import 
+print "\n###################################################################\n"
 
-    pipe = Pipeline()
+### End-to-end, example calls:
 
-    filename = 'somefile'
+pipe = Pipeline()
 
-    pipe.addAcquirer(AcquirerAdaptor(ReadFileAcquirer(filename)), 'readfile')
-    pipe.addDataMiner(MinerAdaptor(ConvertToChunksMiner(), 'chunkify')
-    pipe.addSearch(SearchAdaptor(FindChunkSearch()), 'chunkSearch')
+filename = 'somefile'
 
-    # use the readfile acquirer to read Inception.srt, process it into a search corpus with the chunkify data miner and store it in 'spokenword'.
+pipe.addAcquirer(AcquirerAdapter(PassThroughAcquirer()), 'readfile')
+pipe.addMiner(DataMinerAdapter(SRTTrieMiner()), 'trie')
+pipe.addSearch(SearchAdapter(TrieSearch()), 'triesearch')
 
-    pipe.acquireAndBuildCorpus('readfile', 'chunkify', 'spokenword', 'Inception.srt')
+# use the readfile acquirer to read Inception.srt, process it into a search corpus with the chunkify data miner and store it in 'spokenword'.
 
-    # Now we can search the spokenword corpus with the chunkSearch search engine and provided search terms...
+pipe.acquireAndBuildCorpus('readfile', 'trie', 'trie', './Inception.srt')
 
-    results = pipe.performSearch('spokenword', 'chunkSearch', "Hello")
+# can also be done as two steps:
 
-    # And pass results out to our GUI or whatever.
+#pipe.performAcquire('readfile', './Inception.srt')
+#pipe.buildCorpus('trie', 'trie', 'readfile')
 
-    """
-    pass
+# Now we can search the trie corpus with the triesearch search engine and provided search terms...
+
+results = pipe.performSearch('trie', 'triesearch', ['conglomerate'])
+
+# And pass results out to our GUI or whatever.
+
+for result in results:
+    print result.startTime, ">", result.endTime, ":", result.content
