@@ -54,7 +54,7 @@ class Trie:
 		
 
 	def getSubtree(self, target):
-		""" Returns new trie rooted at node 'target', or None if not found """
+		""" Returns trie rooted at node 'target', or None if not found """
 		
 		result = self.getNode(target)
 
