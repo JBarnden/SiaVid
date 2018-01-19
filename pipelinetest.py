@@ -1,86 +1,83 @@
 from pipeline import *
 from exampleplugins import *
 
-pipe = Pipeline()
+if (True):
 
-print ""
+    pipe = Pipeline()
 
+    print ""
 
-print "### Register and test a data miner that just splits input on 'e':"
-print ""
+    print "### Register and test a data miner that just splits input on 'e':"
+    print ""
 
+    pipe.addMiner(DataMinerAdapter(SplitDataMiner()), 'test')
 
-pipe.addMiner(DataMinerAdapter(SplitDataMiner()), 'test')
+    pipe.buildCorpus('test', 'test', ["test"])
+    print pipe.corpus['test']
+    print ""
 
-pipe.buildCorpus('test', 'test', ["test"])
-print pipe.corpus['test']
-print ""
+    # Component management
 
+    print "### Add a ReadFileAcquirer and check for existence,, test it provides correct data, delete and check for non-existence:"
+    print "" 
 
-# Component management
+    # Add a ReadFileAcquirer acquisition module
+    pipe.addAcquire(AcquirerAdapter(ReadFileAcquirer("Inception.srt")), "test")
 
-print "### Add a ReadFileAcquirer and check for existence,, test it provides correct data, delete and check for non-existence:"
-print "" 
+    print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer added correctly
 
+    # Acquire data, test it's been returned correctly
+    print "Line 208:", pipe.acquire["test"].acquire()[208]
 
-# Add a ReadFileAcquirer acquisition module
-pipe.addAcquire(AcquirerAdapter(ReadFileAcquirer("Inception.srt")), "test")
+    pipe.removeAcquire("test")		# remove acquirer
+    print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer removed correctly
 
-print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer added correctly
+    print ""
 
-# Acquire data, test it's been returned correctly
-print "Line 208:", pipe.acquire["test"].acquire()[208]
+    # Testing searching with a given corpus, Search and terms
 
-pipe.removeAcquire("test")		# remove acquirer
-print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer removed correctly
-
-print ""
-
-
-# Testing searching with a given corpus, Search and terms
-
-print "### Add a Test corpus, Attempt to use a non-existent SearchEngine to search it, then add a FirstLineSearch, enumerate to check existence, and use that instead."
-print ""
+    print "### Add a Test corpus, Attempt to use a non-existent SearchEngine to search it, then add a FirstLineSearch, enumerate to check existence, and use that instead."
+    print ""
 
 
-print "adding 'Test' corpus"
-pipe.corpus['Test'] = ["This is a first line"]
+    print "adding 'Test' corpus"
+    pipe.corpus['Test'] = ["This is a first line"]
 
+    # Searching with missing chunks:
+    pipe.performSearch("Test", "thing", "e")
 
-# Searching with missing chunks:
-pipe.performSearch("Test", "thing", "e")
+    # add a search method
+    pipe.addSearch(SearchAdapter(SearchInFirstLine()), "firstline")
+    print "Current Searches:", pipe.listSearch()
 
-# add a search method
-pipe.addSearch(SearchAdapter(SearchInFirstLine()), "firstline")
-print "Current Searches:", pipe.listSearch()
+    # Add a test corpus and search within it using the search method tagged 'firstline'
+    result = pipe.performSearch("Test", "firstline", "e")
+    print "Result:", result
 
-# Add a test corpus and search within it using the search method tagged 'firstline'
-result = pipe.performSearch("Test", "firstline", "e")
-print "Result:", result
+    pipe.reportStatus()
 
-pipe.reportStatus()
+else:
+    """
+    # End-to-end, example calls:
+    from exampleplugins import 
 
-# End-to-end, example calls:
+    pipe = Pipeline()
 
-"""
+    filename = 'somefile'
 
-pipe = Pipeline()
+    pipe.addAcquirer(AcquirerAdaptor(ReadFileAcquirer(filename)), 'readfile')
+    pipe.addDataMiner(MinerAdaptor(ConvertToChunksMiner(), 'chunkify')
+    pipe.addSearch(SearchAdaptor(FindChunkSearch()), 'chunkSearch')
 
-filename = 'somefile'
+    # use the readfile acquirer to read Inception.srt, process it into a search corpus with the chunkify data miner and store it in 'spokenword'.
 
-pipe.addAcquirer(AcquirerAdaptor(ReadFileAcquirer(filename)), 'readfile')
-pipe.addDataMiner(MinerAdaptor(ConvertToChunksMiner(), 'chunkify')
-pipe.addSearch(SearchAdaptor(FindChunkSearch(), 'chunkSearch')
+    pipe.acquireAndBuildCorpus('readfile', 'chunkify', 'spokenword', 'Inception.srt')
 
-# use the readfile acquirer to read Inception.srt, process it into a search corpus with the chunkify data miner and store it in 'spokenword'.
+    # Now we can search the spokenword corpus with the chunkSearch search engine and provided search terms...
 
-pipe.acquireAndBuildCorpus('readfile', 'chunkify', 'spokenword', 'Inception.srt')
+    results = pipe.performSearch('spokenword', 'chunkSearch', "Hello")
 
-# Now we can search the spokenword corpus with the chunkSearch search engine and provided search terms...
+    # And pass results out to our GUI or whatever.
 
-results = pipe.performSearch('spokenword', 'chunkSearch', "Hello")
-
-# And pass results out to our GUI or whatever.
-
-
-"""
+    """
+    pass
