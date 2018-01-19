@@ -1,6 +1,16 @@
 class Acquirer:
 	""" Basic definition for data acquisition class """
 
+	def performAcquire(self, *args):
+		""" Calls self.acquire() in another thread """
+
+		self.status = 0
+		# TODO: do this in separate thread later:
+		result = self.acquire(*args)
+		self.status = 1
+
+		return result
+
 	def acquire(self, *args):
 		""" 	Do something to acquire data. 
 			This can e.g return text data directly
@@ -15,8 +25,8 @@ class AcquirerAdapter:
 	def __init__(self, acquirer):
 		self.acquirer = acquirer
 
-	def acquire(self, *args):
-		return self.acquirer.acquire(*args)
+	def performAcquire(self, *args):
+		return self.acquirer.performAcquire(*args)
 
 class SearchEngine:
 	""" Basic definition for SearchEngine class """
@@ -92,6 +102,7 @@ class Pipeline:
 		self.mine = {}
 		self.search = {}
 
+		self.rawData = {}
 		self.corpus = {}
 
 	def listAcquirers(self):
@@ -99,18 +110,20 @@ class Pipeline:
 
 		return self.acquire.keys()
 
-	def addAcquire(self, acquirer, tag):
+	def addAcquirer(self, acquirer, tag):
 		""" Add a new acquirer tagged 'tag' """
 
 		print "Adding acquirer '{0}'.".format(tag)
 		self.acquire[tag] = acquirer
 
-	def removeAcquire(self, tag):
+	def removeAcquirer(self, tag):
 		""" Remove the acquirer tagged 'tag' """
 
 		if self.acquire.has_key(tag):
 			print "Deleting acquirer '{0}'.".format(tag)
 			del self.acquire[tag]
+			if self.rawData.has_key(tag):
+				del self.rawData[tag]
 		else:
 			print "No acquirer '{0}'.".format(tag)
 
@@ -171,16 +184,23 @@ class Pipeline:
 
 		return self.search[searchTag].performSearch(self.corpus[corpusTag], searchTerms)
 
+	def performAcquire(self, acquireTag, *acquireArgs):
+		""" Performs an Acquire using the tagged Acquirer and stores
+			the results in rawData with the acquirer's tag """
+
+		self.rawData[acquireTag] = self.acquire[acquireTag].performAcquire(*acquireArgs)
+
 	def acquireAndBuildCorpus(self, acquireTag, minerTag, corpusTag, *acquireArgs):
 		""" Acquire input and generate a corpus from it with a given miner in one step """
 
-		print acquireArgs 
-		buildCorpus(corpusTag, minerTag, acquire[acquireTag].acquire(*acquireArgs))
+		self.performAcquire(acquireTag, *acquireArgs)
+		self.buildCorpus(corpusTag, minerTag, acquireTag)
 
-	def buildCorpus(self, minerTag, corpusTag, data):
-
+	def buildCorpus(self, minerTag, corpusTag, acquireTag):
 		""" Generate a corpus from a given dataset using a given miner """
-		self.corpus[corpusTag] = self.mine[minerTag].buildCorpus(data)
+
+		print "Building corpus '{0}' from rawData '{1}' using miner '{2}'".format(corpusTag, acquireTag, minerTag)
+		self.corpus[corpusTag] = self.mine[minerTag].buildCorpus(self.rawData[acquireTag])
 		
 
 	def reportStatus(self):
