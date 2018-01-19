@@ -30,7 +30,7 @@ They may also inherit from a subclass of one of those - a ReadFileWithCheese mig
 
 Any setup specific to that given instance should be done in the constructor; once they are allocated in the pipeline they can only be replaced, not adjusted.
 
-`
+```Python
 search = MySearch(someSetupArgs)
 pipe.addSearch(search, 'mysearch')
 pipe.performSearch('someCorpus', 'mysearch', ['term1', 'term2'])
@@ -39,7 +39,7 @@ search2 = MySearch(someOtherSetupArgs)
 pipe.removeSearch('mysearch')
 pipe.addSearch(search, 'mysearch')
 pipe.performSearch('someCorpus', 'mysearch', ['term3', 'term4'])
-`
+```
 
 ## Plugin interfaces
 
