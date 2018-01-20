@@ -1,0 +1,19 @@
+voices
+female american 1 (0:12) //When this voice starts
+female british 1 (3:35) //When this voice starts..
+
+properties
+no background noise
+high quality audio (good microphone used)
+
+
+
+
+
+Transcript:
+
+00:12
+first three seconds of speech
+00:15
+second three seconds of speech
+...
