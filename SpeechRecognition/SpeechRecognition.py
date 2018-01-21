@@ -1,15 +1,21 @@
 ﻿from time import gmtime, strftime
 
-# Library require manual installation (pip install SpeechRecognition)
+
+
+# Library requires installation (pip install SpeechRecognition)
 import speech_recognition as sr
-
-
-
 class SpeechRecognitionAdapter(object):
+    """
+        A wrapper class for the 'SpeechRecognition' library,
+        created to make testing and optimising engines easier.
+        Includes a method to format SRT files to be used as referemce
+        transcripts, and a Word-Error-Rate calculator to evaluate performance.
+    """
+
     def __init__(self):
         # Create instance of recognizer object accessible
         # to all class methods
-        self.r = sr.Recognizer()
+        self._r = sr.Recognizer()
 
         # List of supported language codes (for Sphinx)
         self.SL = ['en-US']
@@ -34,18 +40,18 @@ class SpeechRecognitionAdapter(object):
         kwargs.setdefault('energyThreshold', -1)
 
         if kwargs['energyThreshold'] > -1:
-            self.r.energy_threshold = kwargs['energyThreshold']
+            self._r.energy_threshold = kwargs['energyThreshold']
         else:
             # recognizer will automatically adjust energy threshold based on "the currently ambient noise level while listening"
             #    - https://github.com/Uberi/speech_recognition/blob/master/reference/library-reference.rst#recognizer_instancedynamic_energy_threshold--true
-            self.r.dynamic_energy_threshold = True
+            self._r.dynamic_energy_threshold = True
 
         # Open audio file for reading, storing it as an AudioFile instance called "source".
         try:
             with sr.AudioFile(audioFilePath) as source:
                 # "Record" audio from source, returns "AudioData" instance
                 #    - https://github.com/Uberi/speech_recognition/blob/master/reference/library-reference.rst#recognizer_instancerecordsource-duration--none-offset--none
-                return self.r.record(source, kwargs['recordDuration'], kwargs['startTime'])
+                return self._r.record(source, kwargs['recordDuration'], kwargs['startTime'])
         except (RuntimeError, TypeError, IOError):
             print "SR Adapter: failed to read audio data"
 
@@ -87,8 +93,9 @@ class SpeechRecognitionAdapter(object):
         kwargs.setdefault("wit", False)
         kwargs.setdefault("verbose", False)
 
-        # Create "Recognizer" object, this holds SR settings and functionality.
-        recognizer = sr.Recognizer()
+        recognizer = self._r
+        # Function returns a list of hypotheses if multiple engines are enabled through kwargs.
+        output = []
 
         if kwargs["energyThreshold"] > -1:
             recognizer.energy_threshold = kwargs["energyThreshold"]
@@ -114,6 +121,7 @@ class SpeechRecognitionAdapter(object):
             if kwargs['sphinx']:
                 try:
                     sphinxText = recognizer.recognize_sphinx(audio, language=language, show_all=kwargs["verbose"])
+                    output.append(sphinxText)
                 except sr.UnknownValueError:
                     print("Sphinx could not understand audio")
                 except sr.RequestError as e:
@@ -127,6 +135,7 @@ class SpeechRecognitionAdapter(object):
                     # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
                     # instead of `r.recognize_google(audio)`
                     googleSRText = recognizer.recognize_google(audio)
+                    output.append(googleSRText)
                 except sr.UnknownValueError:
                     print("Google Speech Recognition could not understand audio")
                 except sr.RequestError as e:
@@ -141,13 +150,18 @@ class SpeechRecognitionAdapter(object):
 
                 try:
                     witAIText = recognizer.recognize_wit(audio, key=WIT_AI_KEY)
+                    output.append(witAIText)
                 except sr.UnknownValueError:
                     print("Wit.ai Speech Recognition could not understand audio")
                 except sr.RequestError as e:
                     print("Could not request results from Wit.ai Speech Recognition service; {0}".format(e))
 
-            return sphinxText, googleSRText, witAIText
+            if len(output) == 1:
+                return output[0]
+            else:
+                return output
 
+    # Function returns true if the given language tag is supported.
     def language_supported(self, language):
         if language in self.SL:
             return True
@@ -202,50 +216,51 @@ class SpeechRecognitionAdapter(object):
         return D[rows-1][cols-1]
 
 
-def load_srt(pathToSubsFile, readFrom=0):
-    import string
+    def load_srt(self, pathToSubsFile, readFrom=0):
+        import string
 
-    """
-    Read an srt file and return a lowercase string containing no numeric characters,
-    newline characters, or punctuation.
+        """
+        Read an srt file and return a lowercase string containing no numeric characters,
+        newline characters, or punctuation.  This can then be used as a reference transcript
+        for word error rate calculation.
 
-    :param readFrom: the index position of the line to begin reading from
-    (where 0 is the first line).
-    :return: lowercase string containing no numeric values or punctuation
-    (matching format of SR output for use in WER function).
-    """
-    try:
-        # Open the subtitle file as object f
-        with open(pathToSubsFile, 'r') as f:
-            # Break file in to array by newline characters
-            fLines = f.readlines()
+        :param readFrom: the line to begin reading from
+        (where 0 is the first line).
+        :return: lowercase string containing no numeric values or punctuation
+        (matching format of SR output for use as a reference script in WER calculation).
+        """
+        try:
+            # Open the subtitle file as object f
+            with open(pathToSubsFile, 'r') as f:
+                # Break file in to array by newline characters
+                fLines = f.readlines()
 
-            # Combine all lines after index "readFrom" into a single string
-            subStr= "".join(fLines[readFrom:])
+                # Combine all lines after index "readFrom" into a single string
+                subStr= "".join(fLines[readFrom:])
 
-            # Convert subs string to lower case, split newline characters
-            subStr=subStr.replace('\n','').lower()
+                # Convert subs string to lower case, split newline characters
+                subStr=subStr.replace('\n','').lower()
 
-            # Remove punctuation
-            subStr.translate(None, string.punctuation)
+                # Remove punctuation
+                subStr.translate(None, string.punctuation)
 
-            # Copy each character from subs back in to subs unless character is digit.
-            # ISSUE: some subtitle files use numeric values (e.g. when speaker says a number)
-            #   instead of spelling numbers as words, this could potentially effect the accuracy
-            #    of the word error rate calculation.
-            subStr = "".join([i for i in subStr if not i.isdigit()])
+                # Copy each character from subs back in to subs unless character is digit.
+                # ISSUE: some subtitle files use numeric values (e.g. when speaker says a number)
+                #   instead of spelling numbers as words, this could potentially effect the accuracy
+                #    of the word error rate calculation.
+                subStr = "".join([i for i in subStr if not i.isdigit()])
 
-            # Replace remaining colons
-            subStr = subStr.replace(':', ' ')
+                # Replace remaining colons
+                subStr = subStr.replace(':', ' ')
 
-            return subStr
+                return subStr
 
-    except(IOError):
-        RuntimeError("load_srt: failed to open file.")
-        return False
+        except(IOError):
+            RuntimeError("load_srt: failed to open file.")
+            return False
 
-    # Convert all text to lower case
-    pass
+        # Convert all text to lower case
+        pass
 
 if __name__ == '__main__':
 
@@ -284,8 +299,8 @@ if __name__ == '__main__':
     print "\nHypothesis: " + hypothesis
 
     # Load reference transcript (SRT format) for WER calculation
-    ref = load_srt(refPath, 19)
+    ref = SRA.load_srt(refPath, 19)
 
-    # Calculate and output word error rate (value from objective function)
+    # Calculate and output word error rate for this hypothesis.
     wer = SRA.word_error_rate(hypothesis, ref)
     print "\nWord Error Rate: " + str(wer)
