@@ -90,6 +90,9 @@ class SpeechRecognitionAdapter(object):
         # Create "Recognizer" object, this holds SR settings and functionality.
         recognizer = sr.Recognizer()
 
+        # Function returns a list of hypotheses if multiple engines are enabled through kwargs.
+        output = []
+
         if kwargs["energyThreshold"] > -1:
             recognizer.energy_threshold = kwargs["energyThreshold"]
         else:
@@ -114,6 +117,7 @@ class SpeechRecognitionAdapter(object):
             if kwargs['sphinx']:
                 try:
                     sphinxText = recognizer.recognize_sphinx(audio, language=language, show_all=kwargs["verbose"])
+                    output.append(sphinxText)
                 except sr.UnknownValueError:
                     print("Sphinx could not understand audio")
                 except sr.RequestError as e:
@@ -127,6 +131,7 @@ class SpeechRecognitionAdapter(object):
                     # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
                     # instead of `r.recognize_google(audio)`
                     googleSRText = recognizer.recognize_google(audio)
+                    output.append(googleSRText)
                 except sr.UnknownValueError:
                     print("Google Speech Recognition could not understand audio")
                 except sr.RequestError as e:
@@ -141,12 +146,16 @@ class SpeechRecognitionAdapter(object):
 
                 try:
                     witAIText = recognizer.recognize_wit(audio, key=WIT_AI_KEY)
+                    output.append(witAIText)
                 except sr.UnknownValueError:
                     print("Wit.ai Speech Recognition could not understand audio")
                 except sr.RequestError as e:
                     print("Could not request results from Wit.ai Speech Recognition service; {0}".format(e))
 
-            return sphinxText, googleSRText, witAIText
+            if len(output) == 1:
+                return output[0]
+            else:
+                return output
 
     def language_supported(self, language):
         if language in self.SL:
