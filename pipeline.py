@@ -1,6 +1,10 @@
 class Acquirer:
 	""" Basic definition for data acquisition class """
 
+	def __init__(self, tempDir='./tmp/'):
+		self.tempDir = tempDir
+
+
 	def performAcquire(self, *args):
 		""" Calls self.acquire() in another thread """
 
@@ -19,15 +23,6 @@ class Acquirer:
 			etc. """
 		pass
 
-class AcquirerAdapter:
-	""" Holds an Acquirer and mediates requests to it """
-
-	def __init__(self, acquirer):
-		self.acquirer = acquirer
-
-	def performAcquire(self, *args):
-		return self.acquirer.performAcquire(*args)
-
 class SearchEngine:
 	""" Basic definition for SearchEngine class """
 
@@ -41,18 +36,11 @@ class SearchEngine:
 
 		return results
 
-class SearchAdapter:
-	""" Holds a SearchEngine and mediates requests to it """
-
-	def __init__(self, engine):
-		self.engine = engine
-
-	def performSearch(self, corpus, terms):
-		return self.engine.performSearch(corpus, terms)
-
-
 class DataMiner:
 	""" Basic definition for DataMiner class """
+
+	def __init__(self, tempDir='./tmp/'):
+		self.tempDir = tempDir
 
 	# TODO: Make this run corpus-building in a separate thread
 	#       and provide a checkStatus() method for testing if
@@ -82,19 +70,6 @@ class DataMiner:
 
 	def checkStatus(self):
 		return self.status
-
-class DataMinerAdapter:
-	""" Holds a DataMiner and mediates requests to it """
-
-	def __init__(self, dataMiner):
-		self.miner = dataMiner
- 
-	def buildCorpus(self, data):
-		return self.miner.buildCorpus(data)
-
-	def checkStatus(self):
-		return self.miner.checkStatus()
-
 
 class Pipeline:
 	def __init__(self):
@@ -152,7 +127,6 @@ class Pipeline:
 
 		return self.search.keys()
 
-
 	def addSearch(self, search, tag):
 		""" Add a new search engine tagged 'tag' """
 
@@ -188,6 +162,7 @@ class Pipeline:
 		""" Performs an Acquire using the tagged Acquirer and stores
 			the results in rawData with the acquirer's tag """
 
+		print "Acquiring to data '{0}' using Acquirer '{1}'".format(acquireTag, acquireTag)
 		self.rawData[acquireTag] = self.acquire[acquireTag].performAcquire(*acquireArgs)
 
 	def acquireAndBuildCorpus(self, acquireTag, minerTag, corpusTag, *acquireArgs):
@@ -201,7 +176,12 @@ class Pipeline:
 
 		print "Building corpus '{0}' from rawData '{1}' using miner '{2}'".format(corpusTag, acquireTag, minerTag)
 		self.corpus[corpusTag] = self.mine[minerTag].buildCorpus(self.rawData[acquireTag])
-		
+	
+	def reprocess(self, minerTag, sourceCorpusTag, destCorpusTag):
+		""" Run an existing corpus through a secondary DataMiner """
+
+		print "Reprocessing corpus '{0}' to corpus '{1}' using miner '{2}'".format(sourceCorpusTag, destCorpusTag, minerTag)
+		self.corpus[destCorpusTag] = self.mine[minerTag].buildCorpus(self.corpus[sourceCorpusTag])
 
 	def reportStatus(self):
 		print len(self.acquire), "Acquirers registered:", self.listAcquirers()
