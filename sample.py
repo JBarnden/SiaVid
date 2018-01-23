@@ -1,14 +1,21 @@
 import json
 
-from flask import Flask, request
+from flask import Flask, request, make_response
 
 from pipeline import Pipeline
-from exampleplugins import SRTTrieMiner, TrieSearch, YoutubeSRTAcquirer
+from exampleplugins import VSSTrieMiner, TrieSearch, PassThroughAcquirer, YoutubeSRTAcquirer
 
 app = Flask(__name__)
 
+class Timeline:
+    def __init__(self):
+        self.acquirer = None
+        self.miner = None
+        self.search = None
+        self.prettyName = ""
+
 pl = Pipeline()
-timelines = []
+timelines = {}
 url = ''
 
 # Register route handlers for URLs...
@@ -18,34 +25,63 @@ def setURL(timeline):
     url = request.form['uri']
 
 @app.route("/getTimelines/")
-def listMiners():
-	return json.dumps(timelines)
+def getSearch():
+    result = {}
 
-@app.route("/getMiners/")
-def listMiners():
-	return json.dumps(pl.listMiners())
+    for name in timelines:
+        result[name] = timelines[name].prettyName
 
-@app.route("/status/<miner>")
-def checkReady(miner):
-    if miner in pl.listMiners():
-        pass
+    resp = make_response(json.dumps(result))
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
+
+@app.route("/status/<timeline>")
+def checkReady(timeline):
+    resp = None
+    
+    if timeline in timelines:
+        print "Timelines"
+        resp = make_response(json.dumps('READY'))
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+         
         #return status of miner
         #return json.dumps(pl.mine[miner].getStatus()
     else:
         #return some error we haven't worked out yet
-        return json.dumps(False)
+        resp = make_response(json.dumps(False))
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
 
 @app.route("/search/<search>", methods=['POST'])
 def doSearch(search):
+    print request.form['searchterms']
+
+    resp = None
+
     if search in pl.listSearch():
         terms = request.form['searchterms'] # TODO: Sanitising of search terms
-        results = pl.performSearch(search, terms)
-        return json.dumps(results)
+        terms = terms.split(" ")
+
+        results = pl.performSearch(search, 'subtitles', terms)
+
+        # Convert to serialisable format...
+        convertedResults = []
+        for result in results:
+            curr = {}
+            curr['start'] = result.startTime
+            curr['end'] = result.endTime
+            convertedResults.append(curr)
+
+        resp = make_response(json.dumps(convertedResults))
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp
     else:
         #return some error we haven't worked out yet
-        return json.dumps(False)
+        resp = make_response(json.dumps(False))
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp
 
-@app.route("add/<timeline>", methods=['GET'])
+@app.route("/add/<timeline>", methods=['GET'])
 def doAcquire(timeline):
     """ Trigger acquisition and processing for a new timeline """
 
@@ -87,14 +123,36 @@ def doAcquire(timeline):
 
 if __name__ == "__main__":
 
-    # we pre-specify the timelines we want to offer...
-    timelines.add('spokenword', 'objectsinscene', 'someothertimeline')
-
     # add our various pipeline components here
-    pl.addAcquirer(YoutubeSRTAcquirer(), 'youtubesubs') # downloads subtitles from Youtube
-    # pl.addAcquirer(YoutubeSegmentVideo(), 'segmentvideo') # downloads video from Youtube and segments it for speech recognition
-    pl.addMiner(SRTTrieMiner(), 'subtitles') # Processes SRT into a trie
-    pl.addSearch(TrieSearch(), 'triesearch')
+    pl.addAcquirer(PassThroughAcquirer(), 'pass') # downloads subtitles from Youtube
+    pl.addMiner(VSSTrieMiner(), 'trieminer') # Processes SRT into a trie
+    pl.addSearch(TrieSearch(), 'subtitles')
+
+    pl.performAcquire('pass', 'paperclip.vtt')
+    pl.buildCorpus('trieminer', 'subtitles', 'pass')
+
+    results = pl.performSearch('subtitles', 'subtitles', ['guess'])
+    for result in results:
+        print "Converting result: {}->{} {}".format(result.startTime, result.endTime, result.getFullText())
+
+    # we pre-specify the timelines we want to offer...
+    timelines['subtitles'] = Timeline()
+    timelines['subtitles'].prettyName = "Downloaded Subtitles"
+    timelines['subtitles'].acquirer = 'pass'
+    timelines['subtitles'].miner = 'trieminer'
+    timelines['subtitles'].search = 'triesearch'
+    
+    # timelines['objectsinscene'] = Timeline()
+    # timelines['objectsinscene'].prettyName = "Objects in Scene"
+    # timelines['objectsinscene'].acquirer = 'youtubesubs'
+    # timelines['objectsinscene'].miner = 'subtitles'
+    # timelines['objectsinscene'].search = 'triesearch'
+    
+    # timelines['someothertimeline'] = Timeline()
+    # timelines['someothertimeline'].prettyName = "Some other Timeline"
+    # timelines['someothertimeline'].acquirer = 'youtubesubs'
+    # timelines['someothertimeline'].miner = 'subtitles'
+    # timelines['someothertimeline'].search = 'triesearch'
 
 
     app.run(host='0.0.0.0')
