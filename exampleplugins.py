@@ -152,7 +152,7 @@ class SRTChunkMiner(DataMiner):
 					words[word] = []
 				words[word].append(chunk)
 
-class VSSChunkMiner(SRTChunkMiner):
+class VSSChunkMiner(DataMiner):
 	def build(self, data):
 		words = {}
 		chunks = []
@@ -164,9 +164,9 @@ class VSSChunkMiner(SRTChunkMiner):
 			line = line.strip() # trims leading/trailing whitespace etc.
 
 			if line == '##':
-				print "End of preamble"
 				skip = False
 				continue
+
 			if skip: continue
 
 			# strip out HTML-style codes
@@ -174,7 +174,6 @@ class VSSChunkMiner(SRTChunkMiner):
 
 			if ("-->" in line):
 				line = line[:29] 	# clip 'align' etc.
-				print line
 				if chunk:			# if we have an existing chunk, save it...
 					self.tagWords(chunk, words)	# Add chunk reference to words in chunk
 					chunks.append(chunk)
@@ -183,13 +182,12 @@ class VSSChunkMiner(SRTChunkMiner):
 
 				chunk.startTime, chunk.endTime = map(self.timestampToSeconds, line.split(" --> "))
 			elif line != "":			# append line to content
-				print line
 				chunk.content.append(line)
 
 		return words
 
 	def timestampToSeconds(self, timestamp):
-		""" Takes a timestamp in .srt (hh:mm:ss,mmm) format and
+		""" Takes a timestamp in .vss (hh:mm:ss.mmm) format and
 			converts it to a (float) number of seconds """
 
 		timestamp, millis = timestamp.split(".")
@@ -197,6 +195,28 @@ class VSSChunkMiner(SRTChunkMiner):
 		
 		seconds = stamp[0]*3600 + stamp[1]*60 + stamp[2] + float(millis)/1000
 		return seconds		
+
+	def tagWords(self, chunk, words):
+		""" Adds a reference to the current chunk to each word
+			in the Words dictionary """
+		usedwords = []
+
+		for word in chunk.getFullText().split(" "):
+			
+			# isolate actual word - no punctuation on either side
+			tmp = re.search("([A-Za-z']+)", word)
+
+			if tmp:
+				word = tmp.group(1)
+
+			word = word.lower()
+
+			if not word in usedwords:
+				usedwords.append(word)
+
+				if not words.has_key(word):
+					words[word] = []
+				words[word].append(chunk)
 
 from trie import Trie, TrieNode
 
@@ -258,6 +278,27 @@ class VSSTrieMiner(DataMiner):
 					target.content.append(item)
 
 		return trie
+
+class TrieMiner(DataMiner):
+	def build(self, data):
+		words = data
+
+		# build a trie from chunklists
+		trie = Trie()
+		for word in words:
+			if word != '':
+				target = trie.getSubtree(word)
+				if target == None:
+					target = TrieNode()
+					trie.addSubtree(word, target)
+				else:
+					target = target.root
+
+				for item in words[word]:
+					target.content.append(item)
+
+		return trie
+
 
 
 from sets import Set

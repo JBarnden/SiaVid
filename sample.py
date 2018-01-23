@@ -3,7 +3,7 @@ import json
 from flask import Flask, request, make_response
 
 from pipeline import Pipeline
-from exampleplugins import VSSTrieMiner, TrieSearch, PassThroughAcquirer, YoutubeSRTAcquirer
+from exampleplugins import VSSChunkMiner, TrieMiner, VSSTrieMiner, TrieSearch, ReadFileAcquirer, PassThroughAcquirer, YoutubeSRTAcquirer
 
 app = Flask(__name__)
 
@@ -124,18 +124,40 @@ def doAcquire(timeline):
 if __name__ == "__main__":
 
     # add our various pipeline components here
-    pl.addAcquirer(PassThroughAcquirer(), 'pass') # downloads subtitles from Youtube
-    pl.addMiner(VSSTrieMiner(), 'trieminer') # Processes SRT into a trie
-    pl.addSearch(TrieSearch(), 'subtitles')
+    pl.addAcquirer(ReadFileAcquirer(), 'read') # reads a text file into a list of lines
+    pl.addMiner(VSSChunkMiner(), 'vssminer') # processes a list of lines in VSS format into a list of SRTChunks
+    pl.addMiner(TrieMiner(), 'trieminer') # Processes list of SRTChunks into a trie
 
-    pl.performAcquire('pass', 'paperclip.vtt')
-    pl.buildCorpus('trieminer', 'subtitles', 'pass')
+    pl.addAcquirer(PassThroughAcquirer(), 'pass') # copies a text file into tempdir, returns path to file
+    pl.addMiner(VSSTrieMiner(), 'vsstrieminer') # Processes a file in VSS format into a trie
+
+    pl.addSearch(TrieSearch(), 'subtitles') # searches a trie
+
+    ####################################################################################################
+    # Demonstration: populating from predownloaded .vtt with reprocessing via VSSChunkMiner->TrieMiner
+
+    pl.performAcquire('read', 'paperclip.vtt')
+    pl.buildCorpus('vssminer', 'tmp', 'read')
+    pl.reprocess('trieminer', 'tmp', 'subtitles')
 
     results = pl.performSearch('subtitles', 'subtitles', ['guess'])
     for result in results:
         print "Converting result: {}->{} {}".format(result.startTime, result.endTime, result.getFullText())
 
-    # we pre-specify the timelines we want to offer...
+    ####################################################################################################
+    # Demonstration: populating from predownloaded .vtt with one-pass VSSTrieMiner
+
+    pl.performAcquire('pass', 'paperclip.vtt')
+    pl.buildCorpus('vsstrieminer', 'subtitles', 'pass')
+
+    results = pl.performSearch('subtitles', 'subtitles', ['guess'])
+    for result in results:
+        print "Converting result: {}->{} {}".format(result.startTime, result.endTime, result.getFullText())
+
+    ####################################################################################################
+    # Actual configuration
+
+    # we pre-specify the timelines we want to offer... TODO: Amend how this is stored.
     timelines['subtitles'] = Timeline()
     timelines['subtitles'].prettyName = "Downloaded Subtitles"
     timelines['subtitles'].acquirer = 'pass'
