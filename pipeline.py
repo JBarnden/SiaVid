@@ -169,7 +169,7 @@ class Pipeline:
 		""" Acquire input and generate a corpus from it with a given miner in one step """
 
 		self.performAcquire(acquireTag, *acquireArgs)
-		self.buildCorpus(corpusTag, minerTag, acquireTag)
+		self.buildCorpus(minerTag, corpusTag, acquireTag)
 
 	def buildCorpus(self, minerTag, corpusTag, acquireTag):
 		""" Generate a corpus from a given dataset using a given miner """
