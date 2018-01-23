@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script>
+
+      // YouTube player stuff.
+
+      // Load iframe player code...
+      var tag = document.createElement('script');
+
+      tag.src = "https://www.youtube.com/iframe_api";
+      var firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+      // ... and create the iframe once loaded
+      var player;
+
+      function onYouTubeIframeAPIReady() {
+        player = new YT.Player('player', {
+          height: '390',
+          width: '640',
+          videoId: 'wGkvyN6s9cY',
+          events: {
+            'onReady': onPlayerReady,
+            'onStateChange': onPlayerStateChange
+          }
+        });
+      }
+
+      // Called when ready to play
+
+      function onPlayerReady(event) {
+        //event.target.playVideo();
+      }
+
+      // Called on state change
+
+      var done = false;
+      function onPlayerStateChange(event) {
+        if (event.data == YT.PlayerState.PLAYING && !done) {
+          setTimeout(stopVideo, 6000);
+          done = true;
+        }
+      }
+
+      function stopVideo() {
+        player.stopVideo();
+      }
+
+      // YouTube stuff done
+
+      var depScrub = {}; // Holds slave scrubber instances and references to their timelines
+      var scrub; // holds master scrubber and reference to timeline
+      var oldElapsed; // Check to see if video has moved when checking if scrubbing is needed.
+
+      window.onload = function() {
+        getTimelineTypes();
+        scrub = {
+          el: document.getElementById("scrubber"),
+          tl: document.getElementById("timeline"),
+          current: {
+            x: 0
+          },
+          last: {
+            x: 0
+          }
+        };
+
+        scrub.el.onmousedown = function () {
+          console.log("Mousedown on scrubber")
+          scrub.mouseDown = true;
+          scrub.origin = scrub.tl.offsetLeft;
+          scrub.last.x = scrub.el.offsetLeft;
+          return false;
+        };
+
+        scrub.tl.onclick = function (e) {
+          return
+          // We want to find the position of the click and then turn it into a % offset
+          percentage = 0; // method goes here
+
+        }
+
+        window.setInterval(function(){scrubFromVideo();}, 100)
+      }
+
+      function registerDepScrubber(scrubber, timeline, name) {
+
+        newDepScrub = {
+          el: scrubber,
+          tl: timeline,
+          current: {
+            x: 0
+          },
+          last: {
+            x: 0
+          }
+        };
+        depScrub[name] = newDepScrub;
+        console.log("Registered new scrubber, '" + name + "'");
+      }
+
+      function setScrubPosition(current, percent) {
+        if (percent < 0) percent = 0;
+        if (percent > 100) percent = 100;
+
+        var scrubStyle  = getComputedStyle(current.el),
+            timeStyle   = getComputedStyle(current.tl, 10),
+            timeWidth   = parseInt(timeStyle.width,10), // Timeline width
+            scrubOffset = (parseInt(scrubStyle.width,10) / timeWidth * 100) / 2; // width of scrubber in % of timeline width, halved
+
+            var newPosition = percent - scrubOffset;
+            // To move into smaller range: (percent / 102 * 100) + 1 - scrubOffset;
+
+            current.el.style.left = newPosition + "%";
+      }
+
+      document.onmousemove = function(e) {          
+        if ((scrub) && (scrub.mouseDown === true)) {
+            var scrubStyle  = getComputedStyle(scrub.el),
+                scrubOffset = parseInt(scrubStyle.width,10)/2,
+                position    = parseInt(scrubStyle.left, 10),
+                newPosition = position + (e.clientX - scrub.last.x),
+                timeStyle   = getComputedStyle(timeline, 10),
+                timeWidth   = parseInt(timeStyle.width,10);
+            oldPosition = scrub.last.x;
+            newPosition = e.movementX;
+            newPosition = (oldPosition + newPosition) / timeWidth * 100;
+
+            setScrubPosition(scrub, newPosition);
+            scrubToVideo(newPosition);
+
+            scrub.last.x        = scrub.last.x + e.movementX;
+          }
+      };
+
+
+      
+      function scrubToVideo(percentage, allowSeekAhead = true) {
+        // scrub video to given % of playback - this should trigger scrubFromVideo on other scrubbers
+
+        var duration = player.getDuration();
+        player.seekTo(duration / 100 * percentage, allowSeekAhead);
+      }
+
+      function scrubFromVideo() {
+        // update position of scrub bar as % of video traversed
+
+        var elapsed = player.getCurrentTime(), duration = player.getDuration();
+        
+        if (elapsed == oldElapsed) return;
+        oldElapsed = elapsed;
+
+        var playedPercent = elapsed/duration * 100;
+
+        if (!scrub.mouseDown) setScrubPosition(scrub, playedPercent);
+
+        for (var key in depScrub) {
+            setScrubPosition(depScrub[key], playedPercent);
+        }
+      }
+
+      function loadNewVideo() {
+        var url = document.getElementById("uri").value;
+        var id = url.split("v=")[1].split("&")[0]; // Everything between =v...&
+        url = "http://www.youtube.com/v/" + id + "?version=3";
+        player.cueVideoByUrl(url); 
+      }
+
+      document.onmouseup = function() {
+        if (scrub.mouseDown) {
+          scrub.mouseDown = false;
+        }
+      };
+
+      function addNewTimeline() {
+        var dropDown = document.getElementById('types');
+        var timelineValue = dropDown.value;
+
+        if (
+            ((timelineValue in depScrub) && (depScrub[timelineValue] != undefined)) ||
+            (timelineValue == "default")
+        ) return;
+
+        var timelineName = "";
+
+        dropDown.childNodes.forEach( // Disable a given timeline option once added.
+          function(current) {
+            if (current.value == timelineValue) {
+              //current.setAttribute('disabled', 'true');
+              timelineName = current.innerHTML;
+            }
+          }
+        )
+
+        var timelines = document.getElementById('timelines'),
+            frame = document.createElement("DIV"),
+            newTimeline = document.createElement("DIV"),
+            scrubber = document.createElement("DIV");
+
+        var id = depScrub.length;
+  
+        frame.innerHTML = timelineName + " [<a class='title' href='javascript: removeTimeline(\"tl_" + timelineValue + "\")'>Remove this timeline</a>]";
+
+        scrubber.setAttribute('id', 'depscrubber' + id);
+        scrubber.setAttribute('class', 'dependentScrubber');
+        newTimeline.setAttribute('id', 'timeline' + id);
+        newTimeline.setAttribute('class', 'dependentTimeline');
+
+        frame.setAttribute('class', 'timelineFrame');
+        frame.setAttribute('id', 'tl_' + timelineValue);
+
+        newTimeline.appendChild(scrubber);
+        frame.appendChild(newTimeline);
+
+        timelines.appendChild(frame);
+
+        registerDepScrubber(scrubber, newTimeline, timelineValue);
+
+        max = parseInt(Math.random() * 8) + 3;
+
+        console.log(max);
+
+        for (var i = 0; i < max; i++) {
+          thisStart = (Math.random() * 70)* i; 
+          startTest = Math.random() * 80 + thisStart;
+          endTest = startTest + Math.random() * 60;
+          console.log("Adding new result: " + startTest + " to " + endTest);
+          addResultToTimeline(depScrub[timelineValue].tl, startTest, endTest, 'searchtermname');
+        }
+      }
+
+      function removeTimeline(timelineName) {
+        tlRoot = timelineName.substr(3, timelineName.length-3);
+        tl = document.getElementById(timelineName);
+
+        console.log("Unregistered timeline " + tlRoot);
+        delete depScrub[tlRoot];
+
+        while (tl.firstChild) {
+          tl.removeChild(tl.firstChild);
+        }
+
+        tl.parentNode.removeChild(tl);
+      }
+
+      function addResultToTimeline(tl, start, end, tag, colour = "#FFDD00") {
+        timeStyle   = getComputedStyle(timeline, 10),
+        timeWidth   = parseInt(timeStyle.width,10);
+        duration    = player.getDuration();
+
+        width = end - start;
+
+        start = start / duration * 100;
+        width = width / duration * 100;
+
+        result = document.createElement("SPAN");
+        result.setAttribute('class', 'highlightField');
+        result.setAttribute('title', tag);
+
+        result.setAttribute('style', 'left: ' + start + '%; width: ' + width + '%; background-color: ' + colour)
+        tl.appendChild(result);
+      }
+
+      // REST functionality
+
+      function getTimelineTypes() {
+        // report data mining functions available in backend
+
+        var capabilities = ["spoken", "visibletext", "scenecontents"];
+        var names = ["Speech", "Written text", "Objects in scene"]; 
+
+        types = document.getElementById('types');
+        for (var i = 0; i < names.length; i++) {
+          newOption = document.createElement('option');
+          newOption.setAttribute('value', capabilities[i]);
+          newOption.innerText = names[i];
+          types.appendChild(newOption);
+        }
+      }
+
+      function getResults(timeline) {
+        // Check for readiness, if ready, read results. If not, flag unready.
+      }
+
+      function triggerDatamine(timeline) {
+        // notify backend that a given data mining method has been requested
+      }
+
+    </script>
+
+    <link rel="stylesheet" href="./player.css">
+  </head>
+
+  <body>
+     
+    <div id="player"></div><!-- <iframe> video player replaces  this <div> tag. -->
+
+    <div id="interface" class="interface">
+
+      <div id="inputs">
+        <form class="inputs">
+          <table>
+            <tr>
+              <td>
+                <input type="text" size="60" placeholder="New video URL" id="uri" style="width: 70%; border: 15 solid #000000;">
+                <input type="button" value="Load video" onclick="loadNewVideo()">
+          
+              <td>
+                <input type="text" size="60" placeholder="Search terms" id="searchterms" style="width: 70%; border: 15 solid #000000;">
+                <input type="button" value="Search" onclick="executeSearch()">
+              
+              <td>
+                <select name="Types" id="types" placeholder="Type of timeline">
+                  <option value="default">Available data mining...</option>
+                </select>
+                
+                <input type="button" value="Add" onclick="addNewTimeline()">
+            </tr>
+          </table>
+      </form>
+      </div>
+
+      <div id="timelines">
+        <div class="timelineFrame" id="default">
+          <div class="timeline" id="timeline">
+            <div class="scrubber" id="scrubber" title="Drag Me"></div>
+          </div>
+        </div>
+      </div>
+
+   </div>
+
+  </body>
+</html>

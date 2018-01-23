@@ -152,6 +152,51 @@ class SRTChunkMiner(DataMiner):
 					words[word] = []
 				words[word].append(chunk)
 
+class VSSChunkMiner(SRTChunkMiner):
+	def build(self, data):
+		words = {}
+		chunks = []
+
+		chunk = None
+		skip = True
+
+		for line in data:
+			line = line.strip() # trims leading/trailing whitespace etc.
+
+			if line == '##':
+				print "End of preamble"
+				skip = False
+				continue
+			if skip: continue
+
+			# strip out HTML-style codes
+			line = re.sub(r"<.*?>", "", line)
+
+			if ("-->" in line):
+				line = line[:29] 	# clip 'align' etc.
+				print line
+				if chunk:			# if we have an existing chunk, save it...
+					self.tagWords(chunk, words)	# Add chunk reference to words in chunk
+					chunks.append(chunk)
+
+				chunk = SRTChunk()		# ... and make a new one
+
+				chunk.startTime, chunk.endTime = map(self.timestampToSeconds, line.split(" --> "))
+			elif line != "":			# append line to content
+				print line
+				chunk.content.append(line)
+
+		return words
+
+	def timestampToSeconds(self, timestamp):
+		""" Takes a timestamp in .srt (hh:mm:ss,mmm) format and
+			converts it to a (float) number of seconds """
+
+		timestamp, millis = timestamp.split(".")
+		stamp = map(int, timestamp.split(":"))
+		
+		seconds = stamp[0]*3600 + stamp[1]*60 + stamp[2] + float(millis)/1000
+		return seconds		
 
 from trie import Trie, TrieNode
 
@@ -184,6 +229,36 @@ class SRTTrieMiner(DataMiner):
 					target.content.append(item)
 
 		return trie
+
+class VSSTrieMiner(DataMiner):
+	def build(self, data):
+
+		# build list of actual lines for chunking
+		lines = []
+		
+		with open(data, "r") as file:
+			lines = file.readlines()
+
+		# get our dict of word-indexed chunklists
+		chunker = VSSChunkMiner()
+		words = chunker.build(lines)
+
+		# build a trie from chunklists
+		trie = Trie()
+		for word in words:
+			if word != '':
+				target = trie.getSubtree(word)
+				if target == None:
+					target = TrieNode()
+					trie.addSubtree(word, target)
+				else:
+					target = target.root
+
+				for item in words[word]:
+					target.content.append(item)
+
+		return trie
+
 
 from sets import Set
 
