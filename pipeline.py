@@ -1,34 +1,79 @@
+from threading import Thread
+
 class Acquirer:
 	""" Basic definition for data acquisition class """
 
 	def __init__(self, tempDir='./tmp/'):
 		self.tempDir = tempDir
-
+		self.status = 5
 
 	def performAcquire(self, *args):
-		""" Calls self.acquire() in another thread """
+		""" calls self.acquire() in this thread """
 
-		self.status = 0
-		# TODO: do this in separate thread later:
-		result = self.acquire(*args)
 		self.status = 1
+		result = self.acquire(*args)
+		
+		if type(result) == tuple:
+			self.status = result[1]
+			result = result[0]
+		else:
+			self.status = 0
 
 		return result
 
+	def performAsyncAcquire(self, target, *args):
+		""" Calls self.acquire() in another thread """
+
+		# Create thread and dispatch
+		t = Thread(target=self.doAsync, args=(target, args))
+		t.start()
+
+	def doAsync(self, target, args):
+		""" Thread harness that calls and handles returns
+			from acquire(), and sets plugin status.
+
+			args is any acquirer arguments
+			target is a tuple of (rawDataDict, acquireTag)
+		"""
+
+		self.status = 1
+		result = self.acquire(*args)
+		
+		if type(result) == tuple:
+			target[0][target[1]] = result[0]
+			self.status = result[1]
+		else:
+			target[0][target[1]] = result
+			self.status = 0
+
 	def acquire(self, *args):
-		""" 	Do something to acquire data. 
+		""" Do something to acquire data. 
 			This can e.g return text data directly
 			or write extracted frames out to files
 			and return list of resulting filenames
-			etc. """
-		pass
+			etc.
+		"""
+		
+		rawData = None
+
+		# The plugin should receive a reference to some kind of mutable type
+		# to allow the receiving thread to amend it.
+
+		# Do some kind of processing here
+
+		# Update self.status so it can be checked via self.checkStatus()
+		return rawData, 0
+
+	def checkStatus(self):
+		return self.status
 
 class SearchEngine:
 	""" Basic definition for SearchEngine class """
 
 	def performSearch(self, corpus, terms):
 		"""	Do something to extract results from corpus
-			based on terms. Any method is appropriate """
+			based on terms. Any method is appropriate
+		"""
 			
 		results = []
 
@@ -41,6 +86,7 @@ class DataMiner:
 
 	def __init__(self, tempDir='./tmp/'):
 		self.tempDir = tempDir
+		self.status = 5
 
 	# TODO: Make this run corpus-building in a separate thread
 	#       and provide a checkStatus() method for testing if
@@ -49,24 +95,64 @@ class DataMiner:
 	def __init__(self):
 		self.status = 0
 
-	def provideRawData(self, someData):
-		self.data = someData;
+	def buildCorpus(self, args):
+		""" calls self.build() in this thread """
 
-	def buildCorpus(self, data):
-		
 		self.status = 1
-		# TODO: calls build in a separate thread
-		corpus = self.build(data)
-		self.status = 0
+		result = self.build(args)
+		
+		if type(result) == tuple:
+			self.status = result[1]
+			result = result[0]
+		else:
+			self.status = 0
 
-		return corpus
+		return result
+
+	def buildAsyncCorpus(self, target, data):
+		""" Starts a thread to run doBuild asynchronously with
+			a given target and dataset.
+		"""
+
+		# Create thread and dispatch
+		t = Thread(target=self.doAsync, args=(target, data))
+		t.start()
+
+	def doAsync(self, target, data):
+		""" Thread harness that calls and handles returns
+			from build(), and sets plugin status.
+
+			data is data to be processed in some way
+			target is a tuple of (corpusDict, corpusTag)
+		"""
+
+		self.status = 1
+		result = self.build(data)
+
+		if type(result) == tuple:
+			target[0][target[1]] = result[0]
+			self.status = result[1]
+		else:
+			target[0][target[1]] = result
+			self.status = 0
 
 	def build(self, data):
+		""" Do something to convert data from an Acquirer
+			either into a searchable corpus or an intermediate
+			corpus for further processing by another DataMiner.
+			The process doesn't matter, only that it's consistent
+			between this DataMiner and the receiving DataMiner or
+			SearchEngine.
+
+			build() MUST return some corpus and a new status int.
+		"""
+
+		status = 1
 		corpus = [] # Holds processed data
-		
+	
 		corpus.append(data) # Processing here
 
-		return corpus
+		return corpus, status
 
 	def checkStatus(self):
 		return self.status
@@ -165,6 +251,14 @@ class Pipeline:
 		print "Acquiring to data '{0}' using Acquirer '{1}'".format(acquireTag, acquireTag)
 		self.rawData[acquireTag] = self.acquire[acquireTag].performAcquire(*acquireArgs)
 
+	def performAsyncAcquire(self, acquireTag, *acquireArgs):
+		""" Performs an Acquire using the tagged Acquirer and stores
+			the results in rawData with the acquirer's tag """
+
+		print "Acquiring to data '{0}' using Acquirer '{1}'".format(acquireTag, acquireTag)
+		target = (self.rawData, acquireTag)
+		self.acquire[acquireTag].performAsyncAcquire(target, *acquireArgs)
+
 	def acquireAndBuildCorpus(self, acquireTag, minerTag, corpusTag, *acquireArgs):
 		""" Acquire input and generate a corpus from it with a given miner in one step """
 
@@ -176,6 +270,13 @@ class Pipeline:
 
 		print "Building corpus '{0}' from rawData '{1}' using miner '{2}'".format(corpusTag, acquireTag, minerTag)
 		self.corpus[corpusTag] = self.mine[minerTag].buildCorpus(self.rawData[acquireTag])
+
+	def buildAsyncCorpus(self, minerTag, corpusTag, acquireTag):
+		""" Generate a corpus from a given dataset using a given miner """
+
+		print "Building corpus '{0}' from rawData '{1}' using miner '{2}'".format(corpusTag, acquireTag, minerTag)
+		target = (self.corpus, corpusTag)
+		self.mine[minerTag].buildAsyncCorpus(target, self.rawData[acquireTag])
 	
 	def reprocess(self, minerTag, sourceCorpusTag, destCorpusTag):
 		""" Run an existing corpus through a secondary DataMiner """
@@ -188,3 +289,9 @@ class Pipeline:
 		print len(self.mine), "Data Miners registered:", self.listMiners()
 		print len(self.search), "Search Engines registered:", self.listSearch()
 		print len(self.corpus), "corpuses registered:", self.corpus.keys()
+
+	def getAcquireStatus(self, acquireTag):
+		return self.acquire[acquireTag].checkStatus()
+
+	def getMinerStatus(self, minerTag):
+		return self.mine[minerTag].checkStatus()
