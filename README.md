@@ -1,4 +1,4 @@
-# experimental
+# Video indexing and search
 
 ## Pipeline
 
@@ -9,14 +9,13 @@ The pipeline is populated with various plugins and provides a unified way to cal
 * `mine{}` holds a dictionary of `DataMiner`s indexed by `minerTag`
 * `search{}` holds a dictionary of `SearchEngine`s indexed by `searchTag`
 
-* `rawData` holds the output of an `Acquirer`, indexed by `acquireTag`
-* `corpus` holds the output of a `DataMiner`, indexed by `corpusTag`
+* `rawData{}` holds the output of an `Acquirer`, indexed by `acquireTag`
+* `corpus{}` holds the output of a `DataMiner`, indexed by `corpusTag`
 
 
 ### Calling
 
-Examples of how to call pipeline methods and pass data are given in `pipelinetest.py` and `testAsync.py`.
-(TODO: Expand this.)
+Examples of how to call pipeline methods and pass data are given in `pipelinetest.py` and `testAsync.py`, and in [Building a Pipeline](#building-a-pipeline).
 
 ## Plugins
 
@@ -77,7 +76,7 @@ Each plugin has a common interface which specifies how it the pipeline talks to 
 
 * performSearch(self, corpus, terms)
 
-    `performSearch` should be implemented in each class that inherits from SearchEngine to allow for some kind of search specific to that class, for instance the `TrieSearch` searches a trie containing references to `SRTChunk`s for given terms and returns results.
+    `performSearch()` should be implemented in each class that inherits from SearchEngine to allow for some kind of search specific to that class, for instance the `TrieSearch` searches a trie containing references to `SRTChunk`s for given terms and returns results.
 
 
 ## Building a pipeline
@@ -98,11 +97,8 @@ The underlying pieces of data that are through the pipeline via the `rawData` an
 
 ```python
 pipeline.performAcquire('./somefile.srt', 'readfile')
-
 pipeline.buildCorpus('srtchunk', 'srtchunk', 'readfile')
-
 pipeline.performSearch('srtchunk', 'risearch', ['term1', 'term2'])
-
 ```
 
 ### Example 2
@@ -114,17 +110,14 @@ pipeline.performSearch('srtchunk', 'risearch', ['term1', 'term2'])
 
 * `YoutubeAudioDownloader.acquire('https://www.youtube.com/watch?v=JIGUHqV-aH8')` __->__ `rawData['ytaudio'], ./tmp/file1.mp3 ./tmp/file2.mp3 ...` 
 * `rawData['ytaudio']`__:__ `['file1.mp3', 'file2.mp3', 'file3.mp3' ...]`
-* `rawData['ytaudio']` __->__ `VoiceSRTChunkMiner.build(rawData['ytaudio']), ./tmp/file1.mp3 ./tmp/file2.mp3 ...` __->__ corpus['srtchunk']`
+* `rawData['ytaudio']` __->__ `VoiceSRTChunkMiner.build(rawData['ytaudio']), ./tmp/file1.mp3 ./tmp/file2.mp3 ...` __->__ `corpus['srtchunk']`
 * `corpus['srtchunk']`__:__ `{'word1': [somechunk, somechunk, somechunk], 'word2': [somechunk, somechunk, somechunk]}`
 * `corpus['srtchunk']` __->__ `SRTTrieMiner.build(corpus['srtchunk'])` __->__ `corpus['triesearch']`
 * `corpus['triesearch']` __->__ `TrieSearch(corpus['triesearch'], ['term1', 'term2'])` __->__ `[result1, result2, result3]`
 
 ```python
 pipeline.performAcquire('https://www.youtube.com/watch?v=JIGUHqV-aH8', 'ytaudio')
-
 pipeline.buildCorpus('voicerec', 'srtchunk', 'ytaudio')
-
 pipeline.reprocess('triemine', 'srtchunk', 'triesearch')
-
 pipeline.performSearch('triesearch', 'triesearch', ['term1', 'term2'])
 ```
