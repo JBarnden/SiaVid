@@ -50,14 +50,21 @@ class PassThroughAcquirer(Acquirer):
 	""" Copies the file to ./tmp and returns path of new file """
 
 	def acquire(self, filename):
-		workingCopy = "./tmp/" + filename
+
+		# strip off any path elements before filename
+		slashIndex = filename.rfind("/")
+		if slashIndex > 0:
+			slashIndex += 1
+
+		workingCopy = "./tmp/" + filename[slashIndex:]
+		
 		with open(workingCopy, 'w') as outfile:
 			with open(filename, 'r') as infile:
 				lines = infile.readlines()
 				for line in lines:
 					outfile.write(line)
 
-		return "./tmp/" + filename
+		return workingCopy
 
 import youtube_dl
 

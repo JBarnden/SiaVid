@@ -136,7 +136,7 @@ if __name__ == "__main__":
     ####################################################################################################
     # Demonstration: populating from predownloaded .vtt with reprocessing via VSSChunkMiner->TrieMiner
 
-    pl.performAcquire('read', 'paperclip.vtt')
+    pl.performAcquire('read', 'testdata/paperclip.vtt')
     pl.buildCorpus('vssminer', 'tmp', 'read')
     pl.reprocess('trieminer', 'tmp', 'subtitles')
 
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     ####################################################################################################
     # Demonstration: populating from predownloaded .vtt with one-pass VSSTrieMiner
 
-    pl.performAcquire('pass', 'paperclip.vtt')
+    pl.performAcquire('pass', 'testdata/paperclip.vtt')
     pl.buildCorpus('vsstrieminer', 'subtitles', 'pass')
 
     results = pl.performSearch('subtitles', 'subtitles', ['guess'])
