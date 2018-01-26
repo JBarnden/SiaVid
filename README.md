@@ -15,7 +15,7 @@ The pipeline is populated with various plugins and provides a unified way to cal
 
 ### Calling
 
-Examples of how to call pipeline methods and pass data are given in `pipelinetest.py`.
+Examples of how to call pipeline methods and pass data are given in `pipelinetest.py` and `testAsync.py`.
 (TODO: Expand this.)
 
 ## Plugins
@@ -47,19 +47,31 @@ Each plugin has a common interface which specifies how it the pipeline talks to 
 
 ### Acquirer
 * performAcquire(self, *args)
+* performAsyncAcquire(self, *args)
+* checkStatus()
 * acquire(self, *args)
 
-`performAcquire()` exists in the base Acquirer class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition. (TODO: Thread not yet implemented, will need some thought about how to handle returns to Pipeline from it)
+`performAcquire()` exists in the base Acquirer class, and calls the `acquire()` method in the same thread.  This is the blocking version.
 
-`acquire()` should be implemented in each class that inherits from Acquirer to allow for some kind of acquisition specific to that class; for instance the `PassThroughAcquirer` makes a copy of the supplied file in the './tmp/' folder and returns the path of this new file.
+`performAsyncAcquire()` exists in the base Acquirer class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition.  The `checkStatus()` method should be polled for completion of asynchronous acquisition.
+
+`checkStatus()` exists in the base Acquirer class and returns the current status code of the plugin.
+
+`acquire()` should be implemented in each class that inherits from Acquirer to allow for some kind of acquisition specific to that class; for instance the `PassThroughAcquirer` makes a copy of the supplied file in the './tmp/' folder and returns the path of this new file.  It should return data to be entered into the `rawData` dictionary and a return code (`0` is assumed if none is specified).
 
 ### DataMiner
 * buildCorpus(self, data)
+* buildAsyncCorpus(self, data)
+* checkStatus()
 * build(self, data)
 
-`buildCorpus()` exists in the base class and calls the `build()` method in a new thread, to allow for non-blocking acquisition. (TODO: Thread not yet implemented, will need some thought about how to handle returns to Pipeline from it)
+`buildCorpus()` exists in the base class and calls the `build()` method in the same thread.  This is the blocking version.
 
-`build()` should be implemented in each class that inherits from DataMiner to allow for some kind of corpus processing specific to that class, for instance the `SRTTrieMiner` processes a .srt file into a list of `SRTChunk`s and a trie containing references to those chunks.
+`buildAsyncCorpus()` exists in the base DataMiner class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition. The `checkStatus()` method should be polled for completion of asynchronous acquisition.
+
+`checkStatus()` exists in the base DataMiner class and returns the current status code of the plugin.
+
+`build()` should be implemented in each class that inherits from DataMiner to allow for some kind of corpus processing specific to that class, for instance the `SRTTrieMiner` processes a .srt file into a list of `SRTChunk`s and a trie containing references to those chunks. It should return data to be entered into the `corpus` dictionary and a return code (`0` is assumed if none is specified).
 
 ### SearchEngine
 
