@@ -78,3 +78,38 @@ Each plugin has a common interface which specifies how it the pipeline talks to 
 * performSearch(self, corpus, terms)
 
 `performSearch` should be implemented in each class that inherits from SearchEngine to allow for some kind of search specific to that class, for instance the `TrieSearch` searches a trie containing references to `SRTChunk`s for given terms and returns results.
+
+
+## Building a pipeline
+
+The underlying pieces of data that are through the pipeline via the `rawData` and `corpus` dictionaries are essentially arbitrary - all that is important is that the plugin producing the data and the plugin receiving the data agree on what that data should be. For instance:
+
+* A `ReadFileAcquirer` tagged as 'readfile' reads the specified file and returns a list of individual lines, which is stored in `rawData` directly.  A `ListSRTChunkMiner` tagged as 'srtchunk' expects to receive a list of lines, and builds a list of chunks and a dictionary mapping words to the chunks that contain those words. A `ReverseIndexSearch` tagged as 'risearch' expects to receive a dictionary mapping words to the chunks containing them, and produces search results:
+
+    * ReadFileAcquirer.acquire('./somefile.srt') __->__ rawData['readfile']
+    * rawData['readfile']: ['line 1', 'line 2', 'line 3']
+    * rawData['readfile'] __->__ ListSRTChunkMiner.build(rawData['readfile']) __->__ corpus['srtchunk']
+    * corpus['srtchunk']: {'word1': [somechunk, somechunk, somechunk], 'word2': [somechunk, somechunk, somechunk]}
+    * corpus['srtchunk'] __->__ ReverseIndexSearch(corpus['srtchunk'], ['term1', 'term2']) __->__ [result1, result2, result3]
+
+    ```
+    pipeline.performAcquire('./somefile.srt', 'readfile')
+    pipeline.buildCorpus('srtchunk', 'srtchunk', 'readfile')
+    pipeline.performSearch('srtchunk', 'risearch', ['term1', 'term2'])
+    ```
+
+* A `YoutubeAudioDownloader` tagged as 'ytaudio' downloads audio from a Youtube video and writes segments of a given length out to its specified temp directory, and returns a list of filenames for those segments, which is stored in `rawData`. A `VoiceSRTChunkMiner` tagged as 'voicerec' expects to receive a list of filenames; it reads each file in turn, runs speech recognition on it to build an SRTChunk, and adds these to a list.  It then generates a dictionary mapping words to the chunks that contain those words. An `SRTTrieMiner` tagged as 'triemine' expects to receive a dictionary mapping words to the chunks that contain those words, and builds a searchable trie from such a dictionary.  A `TrieSearch` tagged as 'triesearch' expects to receive a trie mapping word stems to chunks containing those words, and produces search results.
+
+    * YoutubeAudioDownloader.acquire('https://www.youtube.com/watch?v=JIGUHqV-aH8') __->__ rawData['ytaudio'], ./tmp/file1.mp3 ./tmp/file2.mp3 ... 
+    * rawData['ytaudio']: ['file1.mp3', 'file2.mp3', 'file3.mp3' ...]
+    * rawData['ytaudio'] __->__ VoiceSRTChunkMiner.build(rawData['ytaudio']), ./tmp/file1.mp3 ./tmp/file2.mp3 ... __->__ corpus['srtchunk']
+    * corpus['srtchunk']: {'word1': [somechunk, somechunk, somechunk], 'word2': [somechunk, somechunk, somechunk]}
+    * corpus['srtchunk'] __->__ SRTTrieMiner.build(corpus['srtchunk']) __->__ corpus['triesearch']
+    * corpus['triesearch'] __->__ TrieSearch(corpus['triesearch'], ['term1', 'term2']) __->__ [result1, result2, result3]
+
+    ```
+    pipeline.performAcquire('https://www.youtube.com/watch?v=JIGUHqV-aH8', 'ytaudio')
+    pipeline.buildCorpus('voicerec', 'srtchunk', 'ytaudio')
+    pipeline.reprocess('triemine', 'srtchunk', 'triesearch')
+    pipeline.performSearch('triesearch', 'triesearch', ['term1', 'term2'])
+    ```
