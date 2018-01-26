@@ -15,7 +15,7 @@ The pipeline is populated with various plugins and provides a unified way to cal
 
 ### Calling
 
-Examples of how to call pipeline methods and pass data are given in `pipelinetest.py` and `testAsync.py`, and in [Building a Pipeline](#building-a-pipeline).
+Examples of how to call pipeline methods and pass data are given in `pipelinetest.py` and `testAsync.py`, and in [Building a Pipeline](#markdown-header-building-a-pipeline).
 
 ## Plugins
 
