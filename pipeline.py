@@ -92,9 +92,6 @@ class DataMiner:
 	#       and provide a checkStatus() method for testing if
 	#       it's complete
 
-	def __init__(self):
-		self.status = 0
-
 	def buildCorpus(self, args):
 		""" calls self.build() in this thread """
 
