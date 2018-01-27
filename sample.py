@@ -1,9 +1,11 @@
-import json
+import json, sys
+from threading import Thread
+from time import sleep
 
 from flask import Flask, request, make_response
 
 from pipeline import Pipeline
-from exampleplugins import VSSChunkMiner, TrieMiner, VSSTrieMiner, TrieSearch, ReadFileAcquirer, PassThroughAcquirer, YoutubeSRTAcquirer
+from exampleplugins import VSSChunkMiner, TrieMiner, TrieSearch, ReadFileAcquirer, YoutubeSRTAcquirer, FileToLineMiner
 
 app = Flask(__name__)
 
@@ -13,16 +15,22 @@ class Timeline:
         self.miner = None
         self.search = None
         self.prettyName = ""
+        self.acquireArgs = ""
 
 pl = Pipeline()
 timelines = {}
-url = ''
+url = "https://www.youtube.com/watch?v=wGkvyN6s9cY"
 
 # Register route handlers for URLs...
 
 @app.route("/setURL", methods=['POST'])
-def setURL(timeline):
+def setURL():
+    global url
     url = request.form['uri']
+    url = url.encode("ascii")
+    resp = make_response(json.dumps("URL updated"))
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
 
 @app.route("/getTimelines/")
 def getSearch():
@@ -37,32 +45,40 @@ def getSearch():
 
 @app.route("/status/<timeline>")
 def checkReady(timeline):
-    resp = None
+    status = None # default sentinel value
     
+    statuses = ["READY", "PENDING", "", "", "", "INIT"]
+
     if timeline in timelines:
-        print "Timelines"
-        resp = make_response(json.dumps('READY'))
-        resp.headers['Access-Control-Allow-Origin'] = '*'
-         
-        #return status of miner
-        #return json.dumps(pl.mine[miner].getStatus()
-    else:
-        #return some error we haven't worked out yet
-        resp = make_response(json.dumps(False))
-        resp.headers['Access-Control-Allow-Origin'] = '*'
+
+        # get the name of the last miner on the timeline
+        miner = timelines[timeline].miner
+        if type(miner) == list:
+            miner = miner[-1]
+        
+        # pull its status
+        status = pl.mine[miner].checkStatus()
+
+    # return the status
+    resp = make_response(json.dumps(statuses[status]))
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+
     return resp
 
-@app.route("/search/<search>", methods=['POST'])
-def doSearch(search):
-    print request.form['searchterms']
+@app.route("/search/<timeline>", methods=['POST'])
+def doSearch(timeline):
 
-    resp = None
+    convertedResults = False
 
-    if search in pl.listSearch():
+    if timeline in timelines:
+        search = timelines[timeline].search
+        corpus = timelines[timeline].corpus[-1]
+
         terms = request.form['searchterms'] # TODO: Sanitising of search terms
+        terms = terms.encode("ascii")
         terms = terms.split(" ")
 
-        results = pl.performSearch(search, 'subtitles', terms)
+        results = pl.performSearch(corpus, search, terms)
 
         # Convert to serialisable format...
         convertedResults = []
@@ -72,51 +88,35 @@ def doSearch(search):
             curr['end'] = result.endTime
             convertedResults.append(curr)
 
-        resp = make_response(json.dumps(convertedResults))
-        resp.headers['Access-Control-Allow-Origin'] = '*'
-        return resp
-    else:
-        #return some error we haven't worked out yet
-        resp = make_response(json.dumps(False))
-        resp.headers['Access-Control-Allow-Origin'] = '*'
-        return resp
+    resp = make_response(json.dumps(convertedResults))
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
 
 @app.route("/add/<timeline>", methods=['GET'])
 def doAcquire(timeline):
     """ Trigger acquisition and processing for a new timeline """
 
-    if timeline == 'spokenword':
+    result = None
 
-        # Only generate new corpus if we don't already have one
-        if not pl.corpus.has_key('spokenword') or pl.corpus['spokenword'] == None:
+    if timeline in timelines:
+        global url
+        result = timeline
 
-            # start a thread to wait for download to be finished if necessary, and then process into a new corpus
-            # TODO: Thread this
+        t = Thread(target=generateTimeline, args=(timelines[timeline], url))
+        t.start()
 
-            # no subs?
-            if not pl.rawData.has_key('youtubesubs', url):
-                pl.performAcquire('youtubesubs') # attempt to download Youtube subtitles
+    resp = make_response(json.dumps(result))
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
 
-                if pl.rawData['youtubesubs'] == None: # no subs on youtube?
-                    
-                    #if we haven't already downloaded the video, acquire it
-                    if not pl.rawData.has_key('segmentvideo') or pl.rawData('segmentvideo') == None:
-                        pl.performAcquire('segmentvideo') # download and segment video ready for speech recognition
+def generateTimeline(timeline, *acquireArgs):
 
-
-                    pl.buildCorpus('speechrecognition', 'spokenword', 'segmentvideo')
-                else:
-                    pl.buildCorpus('')
-
-    elif timeline == 'objectsinscene':
-        # do stuff related to objects in scene
-        pass
-    elif timeline == 'someothertimeline':
-        # do stuff related to some other timeline
-        pass
+    if type(timeline.miner) == list:
+        pl.acquireAndBuildCorpus(timeline.acquirer, timeline.miner[0], timeline.corpus[0], *acquireArgs)
+        for index in range(1, len(timeline.miner)):
+            pl.reprocess(timeline.miner[index], timeline.corpus[index-1], timeline.corpus[index])
     else:
-        #return some error we haven't worked out yet
-        return json.dumps(False)
+        pl.acquireAndBuildCorpus(timeline.acquirer, timeline.miner, timeline.corpus, *acquireArgs)
 
 
 # Initial setup stuff...
@@ -124,57 +124,27 @@ def doAcquire(timeline):
 if __name__ == "__main__":
 
     # add our various pipeline components here
-    pl.addAcquirer(ReadFileAcquirer(), 'read') # reads a text file into a list of lines
+    pl.addAcquirer(YoutubeSRTAcquirer(), 'ytsub') # downloads an autogenerated VSS file from Youtube to temp folder
+    pl.addMiner(FileToLineMiner(), 'fileline') # processes a file into a list of lines
     pl.addMiner(VSSChunkMiner(), 'vssminer') # processes a list of lines in VSS format into a list of SRTChunks
     pl.addMiner(TrieMiner(), 'trieminer') # Processes list of SRTChunks into a trie
+    pl.addSearch(TrieSearch(), 'triesearch') # searches a trie
 
-    pl.addAcquirer(PassThroughAcquirer(), 'pass') # copies a text file into tempdir, returns path to file
-    pl.addMiner(VSSTrieMiner(), 'vsstrieminer') # Processes a file in VSS format into a trie
+    # we pre-specify the timelines we want to offer...
 
-    pl.addSearch(TrieSearch(), 'subtitles') # searches a trie
-
-    ####################################################################################################
-    # Demonstration: populating from predownloaded .vtt with reprocessing via VSSChunkMiner->TrieMiner
-
-    pl.performAcquire('read', 'testdata/paperclip.vtt')
-    pl.buildCorpus('vssminer', 'tmp', 'read')
-    pl.reprocess('trieminer', 'tmp', 'subtitles')
-
-    results = pl.performSearch('subtitles', 'subtitles', ['guess'])
-    for result in results:
-        print "Converting result: {}->{} {}".format(result.startTime, result.endTime, result.getFullText())
-
-    ####################################################################################################
-    # Demonstration: populating from predownloaded .vtt with one-pass VSSTrieMiner
-
-    pl.performAcquire('pass', 'testdata/paperclip.vtt')
-    pl.buildCorpus('vsstrieminer', 'subtitles', 'pass')
-
-    results = pl.performSearch('subtitles', 'subtitles', ['guess'])
-    for result in results:
-        print "Converting result: {}->{} {}".format(result.startTime, result.endTime, result.getFullText())
-
-    ####################################################################################################
-    # Actual configuration
-
-    # we pre-specify the timelines we want to offer... TODO: Amend how this is stored.
     timelines['subtitles'] = Timeline()
     timelines['subtitles'].prettyName = "Downloaded Subtitles"
-    timelines['subtitles'].acquirer = 'pass'
-    timelines['subtitles'].miner = 'trieminer'
+    timelines['subtitles'].acquirer = 'ytsub'
+    timelines['subtitles'].miner = ['fileline', 'vssminer', 'trieminer']
+    timelines['subtitles'].corpus = ['fileline', 'vssminer', 'trieminer']
     timelines['subtitles'].search = 'triesearch'
-    
-    # timelines['objectsinscene'] = Timeline()
-    # timelines['objectsinscene'].prettyName = "Objects in Scene"
-    # timelines['objectsinscene'].acquirer = 'youtubesubs'
-    # timelines['objectsinscene'].miner = 'subtitles'
-    # timelines['objectsinscene'].search = 'triesearch'
-    
-    # timelines['someothertimeline'] = Timeline()
-    # timelines['someothertimeline'].prettyName = "Some other Timeline"
-    # timelines['someothertimeline'].acquirer = 'youtubesubs'
-    # timelines['someothertimeline'].miner = 'subtitles'
-    # timelines['someothertimeline'].search = 'triesearch'
+
+    # timelines['speechrec'] = Timeline()
+    # timelines['speechrec'].prettyName = "Speech Recognition"
+    # timelines['speechrec'].acquirer = 'ytaudiochunker'
+    # timelines['speechrec'].miner = ['speechrec', 'trieminer']
+    # timelines['speechrec'].corpus = ['speechrec', 'trieminer']
+    # timelines['subtitles'].search = 'triesearch'
 
 
     app.run(host='0.0.0.0')
