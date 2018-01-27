@@ -69,25 +69,37 @@ class PassThroughAcquirer(Acquirer):
 import youtube_dl
 
 class YoutubeSRTAcquirer(Acquirer):
-	def __init__(self):
+	def __init__(self, tempdir='./tmp/'):
 		self.ydl_opts = {
 			'writeautomaticsub': True,
     		'outtmpl': unicode('./tmp/%(id)s.%(ext)s'),
     		'skip_download': True,
     		'quiet': True,
 		}
+		self.tempdir = tempdir
+
 	def setOptions(self, opts):
 		self.ydl_opts = opts
 
-	def acquire(self, url):
+	def acquire(self, *url):
 		subfilename = ''
 
+		print url
+    
 		with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
-			ydl.download(url)
+			result = ydl.download(url)
 			
-		subfilename = url.split("=")[1]
-		print subfilename
+		subfilename = self.tempdir + url[0].split("=")[1] + '.en.vtt'
 		return subfilename
+
+class FileToLineMiner(DataMiner):
+	def build(self, data):
+		lines = []
+		
+		with open(data, "r") as file:
+			lines = file.readlines()
+		
+		return lines
 
 import re
 from chunker import SRTChunk
