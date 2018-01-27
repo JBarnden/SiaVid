@@ -29,7 +29,7 @@ function onYouTubeIframeAPIReady() {
 // Called when ready to play
 
 function onPlayerReady(event) {
-    //event.target.playVideo();
+    event.target.playVideo();
 }
 
 // Called on state change
@@ -37,15 +37,16 @@ function onPlayerReady(event) {
 var done = false;
 function onPlayerStateChange(event) {
     if (event.data == YT.PlayerState.PLAYING && !done) {
-        setTimeout(stopVideo, 6000);
+        console.log("Pausing.");
+        setTimeout(pauseVideo, 10);
         done = true;
     }
 }
 
 // Method to pause video
 
-function stopVideo() {
-    player.stopVideo();
+function pauseVideo() {
+    player.pauseVideo();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -124,8 +125,11 @@ function doGet(url, callback, arg=null) {
 function doPost(url, params, callback, arg=null) {
     // TODO
     url = requestURL+url;
-    var xmlHttp = new XMLHttpRequest();
+
+    console.log("Making request: " + url);
     
+    var xmlHttp = new XMLHttpRequest();
+
     xmlHttp.open("POST", url, true);
     xmlHttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
 
@@ -167,15 +171,6 @@ function setTimelineTypes(timelines) {
     }
 }
 
-function getResults(timeline) {
-    // Check for readiness, if ready, read results.
-
-    // TODO
-
-    if (status[timeline] != "READY") return;
-    doPost();
-}
-
 function triggerDatamine(timeline) {
     // notify backend that a given data mining method has been requested
 
@@ -184,9 +179,10 @@ function triggerDatamine(timeline) {
 
 function executeSearch(terms) {
     var params = 'searchterms=' + document.getElementById('searchterms').value;
-    console.log(params);
+
     for (tl in depScrub) {
-        console.log("Searching " + tl);
+        if (depScrub[tl].status != "READY") continue;
+        console.log("Searching " + tl + ": " + params);
         doPost('search/' + tl, params, addResults, tl);
     }
 }
@@ -263,6 +259,8 @@ function addNewTimeline() {
         (timelineValue == "default")
     ) return;
 
+    // trigger backend data processing
+
     var timelineName = "";
 
     dropDown.childNodes.forEach( // Disable a given timeline option once added.
@@ -295,6 +293,7 @@ function addNewTimeline() {
 
     // Store handles to the new scrubber
     registerDepScrubber(scrubber, newTimeline, timelineValue);
+    doGet('add/' + timelineValue, null);
 }
 
 function removeTimeline(timeline) {
@@ -333,6 +332,8 @@ function addResults(results, timeline) {
     // Add each returned result to the timeline specified
 
     if (!timeline in depScrub) return;
+
+    console.log("Adding " + results.length + " results to " + timeline);
 
     for (var result in results) {
         addResultToTimeline(timeline, results[result].start, results[result].end);
@@ -388,10 +389,23 @@ function loadNewVideo() {
     // Loads a new video into the player and notify the backend
 
     var url = document.getElementById("uri").value;
+
+    // notify backend
+    doPost('setURL', "uri=" + encodeURI(url), function(result) {console.log(result);});
+
+    // clear timelines
+    for (var key in depScrub) {
+        clearResults(key);
+        removeTimeline(key);
+    }
+
     var id = url.split("v=")[1].split("&")[0]; // Everything between =v...&
-    url = "http://www.youtube.com/v/" + id + "?version=3";
+    url = "http://www.youtube.com/v/" + id;
+    url += "?version=3";
     player.cueVideoByUrl(url);
 
+    done = false;
+    player.playVideo();
 }
 
 function scrubToVideo(percentage, allowSeekAhead = true) {

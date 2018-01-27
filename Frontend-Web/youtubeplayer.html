@@ -14,23 +14,26 @@
     <div id="interface" class="interface">
 
       <div id="inputs">
-        <form class="inputs">
-          <table>
-            <tr>
-              <td>
+        <table>
+          <tr>
+            <td>
+              <form class="inputs">
                 <input type="text" size="60" placeholder="New video URL" id="uri" style="width: 70%; border: 15 solid #000000;">
                 <input type="button" value="Load video" onclick="loadNewVideo()">
-          
-              <td>
+              </form>
+            <td>
+              <form class="inputs">
                 <input type="text" size="60" placeholder="Search terms" id="searchterms" style="width: 70%; border: 15 solid #000000;">
                 <input type="button" value="Search" onclick="executeSearch()">
-              
-              <td>
+              </form>
+            <td>
+              <form class="inputs">
                 <select name="Types" id="types" placeholder="Type of timeline">
                   <option value="default">Available data mining...</option>
                 </select>
                 
                 <input type="button" value="Add" onclick="addNewTimeline()">
+              </form>
             </tr>
           </table>
       </form>
