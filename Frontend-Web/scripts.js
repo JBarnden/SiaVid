@@ -183,6 +183,7 @@ function executeSearch(terms) {
     for (tl in depScrub) {
         if (depScrub[tl].status != "READY") continue;
         console.log("Searching " + tl + ": " + params);
+        clearResults(tl);
         doPost('search/' + tl, params, addResults, tl);
     }
 }

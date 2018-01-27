@@ -8,31 +8,34 @@
   </head>
 
   <body>
-     
+    <div>
     <div id="player"></div><!-- <iframe> video player replaces  this <div> tag. -->
 
     <div id="interface" class="interface">
-
       <div id="inputs">
         <table>
           <tr>
             <td>
               <form class="inputs">
                 <input type="text" size="60" placeholder="New video URL" id="uri" style="width: 70%; border: 15 solid #000000;">
-                <input type="button" value="Load video" onclick="loadNewVideo()">
+                <input type="button" value="Load new video" onclick="loadNewVideo()">
               </form>
-            <td>
-              <form class="inputs">
-                <input type="text" size="60" placeholder="Search terms" id="searchterms" style="width: 70%; border: 15 solid #000000;">
-                <input type="button" value="Search" onclick="executeSearch()">
-              </form>
-            <td>
+            <td align="right">
               <form class="inputs">
                 <select name="Types" id="types" placeholder="Type of timeline">
                   <option value="default">Available data mining...</option>
                 </select>
-                
+                <td align="center">
                 <input type="button" value="Add" onclick="addNewTimeline()">
+              </form>
+            </tr>
+            <tr>
+              <td>
+              <td align="right">
+              <form class="inputs">
+                <input type="text" size="60" placeholder="Search terms" id="searchterms" style="width: 70%; border: 15 solid #000000;">
+              <td align="center">  
+                <input type="button" value="Search" onclick="executeSearch()">
               </form>
             </tr>
           </table>
@@ -46,8 +49,8 @@
           </div>
         </div>
       </div>
-
    </div>
+    </div>
 
   </body>
 </html>
