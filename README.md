@@ -1,5 +1,15 @@
 # Video indexing and search
 
+## Dependencies
+
+`Pipeline` relies on `threading` for asynchronous plugin calls.
+
+Several Dataminer plugins rely on `re`.
+
+TrieSearch relies on `set`.
+
+The web backend provided in `sample.py` relies on `json`, `sys`, `os`, `threading` and `flask`.
+
 ## Pipeline
 
 The pipeline is populated with various plugins and provides a unified way to call and pass data between them:
