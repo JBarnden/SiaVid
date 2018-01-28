@@ -156,4 +156,4 @@ if __name__ == "__main__":
     # timelines['speechrec'].corpus = ['speechrec', 'trieminer']
     # timelines['subtitles'].search = 'triesearch'
 
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', use_reloader=True, threaded=True)
