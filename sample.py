@@ -1,13 +1,18 @@
 import json, sys
+from os import getcwd
 from threading import Thread
 from time import sleep
 
-from flask import Flask, request, make_response
+from flask import Flask, request, make_response, render_template
 
 from pipeline import Pipeline
 from exampleplugins import VSSChunkMiner, TrieMiner, TrieSearch, ReadFileAcquirer, YoutubeSRTAcquirer, FileToLineMiner
 
-app = Flask(__name__)
+
+
+app = Flask(__name__, static_url_path='', static_folder=getcwd() + '/Frontend-Web')
+
+# TODO: Some kind of binding of 'url' setting to source IP. Or passing during search possibly?
 
 class Timeline:
     def __init__(self):
@@ -147,4 +152,4 @@ if __name__ == "__main__":
     # timelines['subtitles'].search = 'triesearch'
 
 
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', debug = True)
