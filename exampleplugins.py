@@ -83,8 +83,6 @@ class YoutubeSRTAcquirer(Acquirer):
 
 	def acquire(self, *url):
 		subfilename = ''
-
-		print url
     
 		with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
 			result = ydl.download(url)
