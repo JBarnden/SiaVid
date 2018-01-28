@@ -3,7 +3,7 @@ from os import getcwd
 from threading import Thread
 from time import sleep
 
-from flask import Flask, request, make_response, render_template
+from flask import Flask, request, make_response, redirect
 
 from pipeline import Pipeline
 from exampleplugins import VSSChunkMiner, TrieMiner, TrieSearch, ReadFileAcquirer, YoutubeSRTAcquirer, FileToLineMiner
@@ -24,9 +24,14 @@ class Timeline:
 
 pl = Pipeline()
 timelines = {}
+
+# initial URL - changed by /setURL
 url = "https://www.youtube.com/watch?v=wGkvyN6s9cY"
 
 # Register route handlers for URLs...
+@app.route("/")
+def root():
+    return redirect('/index.html')
 
 @app.route("/setURL", methods=['POST'])
 def setURL():
@@ -151,5 +156,4 @@ if __name__ == "__main__":
     # timelines['speechrec'].corpus = ['speechrec', 'trieminer']
     # timelines['subtitles'].search = 'triesearch'
 
-
-    app.run(host='0.0.0.0', debug = True)
+    app.run(host='0.0.0.0')
