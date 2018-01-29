@@ -8,8 +8,6 @@ from flask import Flask, request, make_response, redirect
 from pipeline import Pipeline
 from exampleplugins import VSSChunkMiner, TrieMiner, TrieSearch, ReadFileAcquirer, YoutubeSRTAcquirer, FileToLineMiner
 
-
-
 app = Flask(__name__, static_url_path='', static_folder=getcwd() + '/Frontend-Web')
 
 # TODO: Some kind of binding of 'url' setting to source IP. Or passing during search possibly?
@@ -78,25 +76,35 @@ def checkReady(timeline):
 @app.route("/search/<timeline>", methods=['POST'])
 def doSearch(timeline):
 
-    convertedResults = False
+    convertedResults = None
 
     if timeline in timelines:
-        search = timelines[timeline].search
-        corpus = timelines[timeline].corpus[-1]
 
-        terms = request.form['searchterms'] # TODO: Sanitising of search terms
-        terms = terms.encode("ascii")
-        terms = terms.split(" ")
+        # get the name of the last miner on the timeline
+        miner = timelines[timeline].miner
+        if type(miner) == list:
+            miner = miner[-1]
+        
+        # pull its status
+        status = pl.mine[miner].checkStatus()
+        if status == 0:
 
-        results = pl.performSearch(corpus, search, terms)
+            search = timelines[timeline].search
+            corpus = timelines[timeline].corpus[-1]
 
-        # Convert to serialisable format...
-        convertedResults = []
-        for result in results:
-            curr = {}
-            curr['start'] = result.startTime
-            curr['end'] = result.endTime
-            convertedResults.append(curr)
+            terms = request.form['searchterms'] # TODO: Sanitising of search terms
+            terms = terms.encode("ascii").lower()
+            terms = terms.split(" ")
+
+            results = pl.performSearch(corpus, search, terms)
+
+            # Convert to serialisable format...
+            convertedResults = []
+            for result in results:
+                curr = {}
+                curr['start'] = result.startTime
+                curr['end'] = result.endTime
+                convertedResults.append(curr)
 
     resp = make_response(json.dumps(convertedResults))
     resp.headers['Access-Control-Allow-Origin'] = '*'
