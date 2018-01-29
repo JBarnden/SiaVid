@@ -36,9 +36,10 @@ function onPlayerReady(event) {
 
 var done = false;
 function onPlayerStateChange(event) {
+    // Ensure player.duration is always available by playing for 5ms.
     if (event.data == YT.PlayerState.PLAYING && !done) {
         console.log("Pausing.");
-        setTimeout(pauseVideo, 10);
+        setTimeout(pauseVideo, 5);
         done = true;
     }
 }
@@ -57,11 +58,10 @@ function pauseVideo() {
 
 // global variables
 
-var requestURL = "http://www.prettyshiny.org:5000/" // Root URL for backend RQs
+var requestURL = "./" // Root URL for backend RQs
 var depScrub = {}; // Holds slave scrubber instances and references to their TLs
 var scrub; // holds master scrubber and reference to timeline
 var oldElapsed; // Check to see if video has moved when scrubbing is needed.
-var status = {}; // holds status variables for timeline searchability
 
 ///////////////////////////////////////////////////
 //
@@ -86,7 +86,9 @@ function checkStatus() {
 
 function updateStatus(status, tlIndex) {
     // Updates a given depScrub's status to match the backend
-       
+ 
+    if (!timeline in depScrub) return;
+
     depScrub[tlIndex].status = status;
 
     if (status == 'READY') {
@@ -333,6 +335,12 @@ function addResults(results, timeline) {
     // Add each returned result to the timeline specified
 
     if (!timeline in depScrub) return;
+    
+    if (results == null) {
+        updateStatus('WAIT', timeline);
+        doGet('add/' + timeline, null);
+        return;
+    }
 
     console.log("Adding " + results.length + " results to " + timeline);
 

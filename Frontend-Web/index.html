@@ -8,39 +8,30 @@
   </head>
 
   <body>
-    <div>
-    <div id="player"></div><!-- <iframe> video player replaces  this <div> tag. -->
+    <div class="ifbackground">
 
-    <div id="interface" class="interface">
-      <div id="inputs">
-        <table>
-          <tr>
-            <td>
-              <form class="inputs">
-                <input type="text" size="60" placeholder="New video URL" id="uri" style="width: 70%; border: 15 solid #000000;">
-                <input type="button" value="Load new video" onclick="loadNewVideo()">
-              </form>
-            <td align="right">
-              <form class="inputs">
-                <select name="Types" id="types" placeholder="Type of timeline">
-                  <option value="default">Available data mining...</option>
-                </select>
-                <td align="center">
-                <input type="button" value="Add" onclick="addNewTimeline()">
-              </form>
-            </tr>
-            <tr>
-              <td>
-              <td align="right">
-              <form class="inputs">
-                <input type="text" size="60" placeholder="Search terms" id="searchterms" style="width: 70%; border: 15 solid #000000;">
-              <td align="center">  
-                <input type="button" value="Search" onclick="executeSearch()">
-              </form>
-            </tr>
-          </table>
-      </form>
-      </div>
+      <div id="interface" class="interface">
+        <div class="inputs">
+          <form class="formspan">
+            <input type="text" size="40" placeholder="New video URL" id="uri">
+            <input type="button" value="Load video" onclick="loadNewVideo()">
+          </form>
+        </div>
+
+        <div id="player"></div><!-- <iframe> video player replaces  this <div> tag. -->
+
+        <div class="inputs">
+          <form class="formspan">
+            <select name="Types" id="types" placeholder="Type of timeline">
+              <option value="default">Available timelines...</option>
+            </select>
+            <input type="button" value="Add" onclick="addNewTimeline()"><br>
+
+            <input type="text" size="40" placeholder="Search terms" id="searchterms">
+            <input type="button" value="Search" onclick="executeSearch()">
+          </form>
+        </div>
+
 
       <div id="timelines">
         <div class="timelineFrame" id="default">
@@ -49,8 +40,8 @@
           </div>
         </div>
       </div>
-   </div>
-    </div>
+      </div>
 
+    </div>
   </body>
 </html>
