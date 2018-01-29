@@ -1,5 +1,22 @@
 # Video indexing and search
 
+This project seeks to provide an extensible, plugin-based means of extracting data from video files (either local or hosted on a service such as YouTube) and providing it in a searchable form to the user.
+
+## Contents
+
+* [Dependencies](#markdown-header-dependencies)
+* [Pipeline](#markdown-header-pipeline)
+  * [Storage](#markdown-header-storage)
+  * [Calling](#markdown-header-calling)
+* [Plugins](#markdown-header-plugins)
+* [Plugin Interfaces](#markdown-header-plugin-interfaces)
+  * [Acquirer](#markdown-header-acquirer)
+  * [DataMiner](#markdown-header-dataminer)
+  * [SearchEngine](#markdown-header-searchengine)
+* [Building a Pipeline](#markdown-header-building-a-pipeline)
+  * [Example 1](#markdown-header-example-1)
+  * [Example 2](#markdown-header-example-2)
+
 ## Dependencies
 
 `Pipeline` relies on `threading` for asynchronous plugin calls.
@@ -9,6 +26,8 @@ Several Dataminer plugins rely on `re`.
 TrieSearch relies on `set`.
 
 The web backend provided in `sample.py` relies on `json`, `sys`, `os`, `threading` and `flask`.
+
+The speech recognition plugins rely on TODO: add speech recognition information
 
 ## Pipeline
 
@@ -37,7 +56,9 @@ Plugins should all inherit from one of the base classes, as follows:
 
 They may also inherit from a subclass of one of those - a ReadFileWithCheese might inherit from a ReadFileAcquirer which inherits from Acquirer.
 
-Any setup specific to that given instance should be done in the constructor; once they are allocated in the pipeline they can only be replaced, not adjusted.
+Asynchronous calling of plugins is all handled in the base classes - as long as `Acquirer`s implement the `acquire()` method and `DataMiner`s implement the `build()` method, they should behave equivalently regardless of whether they are called via `Pipeline.performAcquire()`/`Pipeline.buildCorpus()` or `Pipeline.performAsyncAquire()`/`Pipeline.buildAsyncCorpus()`.
+
+Any setup specific to a given instance of a plugin should be done in the plugin's constructor; once allocated in the pipeline a plugin can only be replaced, not adjusted.
 
 ```Python
 search = MySearch(someSetupArgs)
@@ -46,23 +67,23 @@ pipe.performSearch('someCorpus', 'mysearch', ['term1', 'term2'])
 
 search2 = MySearch(someOtherSetupArgs)
 pipe.removeSearch('mysearch')
-pipe.addSearch(search, 'mysearch')
+pipe.addSearch(search2, 'mysearch')
 pipe.performSearch('someCorpus', 'mysearch', ['term3', 'term4'])
 ```
 
 ## Plugin interfaces
 
-Each plugin has a common interface which specifies how it the pipeline talks to it:
+Each plugin has a common interface which specifies how the pipeline talks to it:
 
 ### Acquirer
 * performAcquire(self, *args)
-* performAsyncAcquire(self, *args)
+* performAsyncAcquire(self, target, *args)
 * checkStatus()
 * acquire(self, *args)
 
     `performAcquire()` exists in the base Acquirer class, and calls the `acquire()` method in the same thread.  This is the blocking version.
 
-    `performAsyncAcquire()` exists in the base Acquirer class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition.  The `checkStatus()` method should be polled for completion of asynchronous acquisition.
+    `performAsyncAcquire()` exists in the base Acquirer class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition.  The `checkStatus()` method should be polled for completion of asynchronous acquisition. `target` holds a tuple consisting of a reference to the `rawData` dict, and the tag to be updated within that dict with the results.
 
     `checkStatus()` exists in the base Acquirer class and returns the current status code of the plugin.
 
@@ -76,7 +97,7 @@ Each plugin has a common interface which specifies how it the pipeline talks to 
 
     `buildCorpus()` exists in the base class and calls the `build()` method in the same thread.  This is the blocking version.
 
-    `buildAsyncCorpus()` exists in the base DataMiner class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition. The `checkStatus()` method should be polled for completion of asynchronous acquisition.
+    `buildAsyncCorpus()` exists in the base DataMiner class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition. The `checkStatus()` method should be polled for completion of asynchronous acquisition.  `target` holds a tuple consisting of a reference to the `corpus` dict, and the tag to be updated within that dict with the results.
 
     `checkStatus()` exists in the base DataMiner class and returns the current status code of the plugin.
 
