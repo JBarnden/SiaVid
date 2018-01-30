@@ -97,6 +97,9 @@ class SpeechRecognitionAdapter(object):
         # Function returns a list of hypotheses if multiple engines are enabled through kwargs.
         output = []
 
+        # Function returns a list of hypotheses if multiple engines are enabled through kwargs.
+        output = []
+
         if kwargs["energyThreshold"] > -1:
             recognizer.energy_threshold = kwargs["energyThreshold"]
         else:

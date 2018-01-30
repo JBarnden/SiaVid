@@ -37,7 +37,11 @@ class Application(object):
                 if os.path.isfile(fpath):
                     os.unlink(fpath)
             except Exception as e:
+<<<<<<< HEAD
                 print e
+=======
+                print "e"
+>>>>>>> 37d6704665334830732950e5a943977116a9d220
 
     def clear(self):
         # Clear and delete the temp directory
@@ -179,6 +183,7 @@ class AudioSplitter(Acquirer):
             # Write frames to the outfile
             out.writeframes(infile.readframes(length))
 
+<<<<<<< HEAD
 class Audio_DL_split(Acquirer):
     def __init__(self, tmpdir, offsetS):
         # Set up audio dl acquirer
@@ -192,6 +197,8 @@ class Audio_DL_split(Acquirer):
         audioFile = self.audioDl.acquire(url)
         # Split the audio in to multiple audio files based on given offset.
         self.audioSplitter.acquire(audioFile)
+=======
+>>>>>>> 37d6704665334830732950e5a943977116a9d220
 
 class SpeechRecogMiner(DataMiner):
 
@@ -260,6 +267,7 @@ class SpeechRecogMiner(DataMiner):
         endTS = endTime.__str__()
         # Return hypothesis as SRT chunk
         return "{0} --> {1}\n".format(startTS, endTS) + hypothesis
+<<<<<<< HEAD
 
 if __name__ == '__main__':
 
@@ -334,6 +342,75 @@ if __name__ == '__main__':
     app.clear()
 
 
+=======
+
+    def getTimestamp(self, timedelta):
+        """
+
+        :param timedelta: datetime.timedelta object
+        :return: string timestamp in the format: "HH:MM:SS"
+        """
+        s = timedelta.total_seconds()
+        hours, remainder = divmod(s, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        return "{0}:{1}:{2}".format(hours, minutes, seconds)
+
+
+if __name__ == '__main__':
+
+    """
+        Create application with ref to temporary files dir & configure pipeline
+        (Had to set a weird temp dir as my VM ran out of disk space)
+    """
+    app = Application('./tmp/')
+
+    audioFile = "How-boredom-can-lead-to-your-most-brilliant-ideas-Manoush-Zomorodi.wav"
+
+    # Copy audio file to tmp directory, this would be done with a YoutubeDL acquirer.
+    copyfile('./SpeechRecognition/TestData/' + audioFile,
+             app.tmpDir + audioFile)
+
+    """
+        This test assumes that all data we're working with will be stored in the application
+        temporary directory, so we need only specify file names.
+    """
+
+    # Set up a 'wavToChunks' acquirer to split an audio file in to new files, each one 3 seconds long
+    app.pl.addAcquirer(wavToChunks(offsetS=3), 'audioAcquirer')
+    # Instantiate a Speech Recognition miner, setting the language code
+    app.pl.addMiner(SpeechRecogMiner(language='en-US'),'SRMiner')
+
+    app.pl.reportStatus()
+
+    """
+        Build a corpus of SRT chunks with the SR Miner
+    """
+    # Build a corpus of SRT chunks with using the audio acquirer and SRMiner
+    print "Building a corpus of SRT chunks with the SR Miner and Acquirer"
+    app.acquireAndBuildCorpus('audioAcquirer', 'SRMiner', 'SRCorpus', audioFile)
+    app.pl.reportStatus()
+
+    # Clean temp dir contents (without deleting the dir)
+    app.clean()
+
+    print "Corpus Entries:"
+    # Check the corpus directly
+    SRTChunks = app.pl.corpus['SRCorpus']
+
+    # Print all chunks
+    for c in SRTChunks:
+        print c
+
+
+
+    # More processing...
+
+    # Delete temp dir and contents now application cycle has finished.
+    app.clear()
+
+
+>>>>>>> 37d6704665334830732950e5a943977116a9d220
 
 
 
