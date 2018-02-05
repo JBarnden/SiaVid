@@ -44,7 +44,7 @@ class Application(object):
         # Clear and delete the temp directory
         rmtree(self.tmpDir)
 
-# Get duration of a wav file in seconds (used by miner and acquirer).
+# Get duration of a wav file in seconds (used by miners).
 def getAudioDuration(path):
     # Check duration of the audio in this file
     with contextlib.closing(wave.open(path, 'r')) as audio:
@@ -54,36 +54,7 @@ def getAudioDuration(path):
         duration = frames / float(rate)
         return duration
 
-class Audio_dl(Acquirer):
-    """
-
-    """
-    def __init__(self, outdir):
-        outfile = outdir + '_%(title)s-%(id)s.%(ext)s'
-        self.ydl_opts = {
-            'format': 'bestaudio/best',
-            'forcefilename':'True',
-            'outtmpl': outdir + outfile,
-            'postprocessors':[{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'wav',
-                'preferredquality': '192',
-            }],
-        }
-
-    def acquire(self, url):
-        import youtube_dl
-
-        with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
-            result = ydl.download(['url'])
-            # Get filename from result
-            filename = result.get('title', None)
-        # Problem!  Need the actual outfile name, not this template.
-        return filename
-
-
-
-class AudioSplitter(Acquirer):
+class AudioSplitter(DataMiner):
 
     def __init__(self, offsetS):
         """
@@ -91,13 +62,15 @@ class AudioSplitter(Acquirer):
 
         :param offsetS: offset in seconds
         """
+        DataMiner.__init__(self)
+
         if not isinstance(offsetS, int):
             raise TypeError(offsetS, "wavToChunks: expected 'int' for offset.")
 
         # Offset in miliseconds
         self.offsetMS = offsetS*1000
 
-    def acquire(self, path):
+    def build(self, path):
         # Check that path is valid
         if not os.path.isfile(path):
             raise IOError(path, "SR Acquirer: Invalid path given.")
@@ -141,7 +114,6 @@ class AudioSplitter(Acquirer):
 
         return paths
 
-
     def slice(self, path, outfile, startMS, endMS):
         """
             Takes a slice from infile, from startMS to endMS.
@@ -179,21 +151,6 @@ class AudioSplitter(Acquirer):
             infile.setpos(anchor+startIndex)
             # Write frames to the outfile
             out.writeframes(infile.readframes(length))
-
-
-class Audio_DL_split(Acquirer):
-    def __init__(self, tmpdir, offsetS):
-        # Set up audio dl acquirer
-        self.audioDl = Audio_dl(tmpdir)
-
-        # Set up audio splitter
-        self.audioSplitter = AudioSplitter(offsetS)
-
-    def acquire(self, chunksPath, url):
-        # Download audio file from video
-        audioFile = self.audioDl.acquire(url)
-        # Split the audio in to multiple audio files based on given offset.
-        self.audioSplitter.acquire(audioFile)
 
 class SpeechRecogMiner(DataMiner):
 
@@ -254,99 +211,109 @@ class SpeechRecogMiner(DataMiner):
         :param endTime: end time of this chunk
         :return:
         """
+        from chunker import SRTChunk
+
         # Get hypothesis from Recognizer
         hypothesis = self.SRA.speech_to_text(pathToAudio, self.language, **self.config)
 
-        # Format timestamps
-        startTS = startTime.__str__()
-        endTS = endTime.__str__()
-        # Return hypothesis as SRT chunk
-        return "{0} --> {1}\n".format(startTS, endTS) + hypothesis
+        # Populate and return an SRTChunk object
+        chunk = SRTChunk()
+        chunk.content = hypothesis
+        chunk.startTime = startTime.seconds
+        chunk.endTime = endTime.seconds
+        return chunk
 
+class StringRepeater(Acquirer):
+    """
+        Always returns the path it was
+        given at instantiation.
+    """
+    def __init__(self, path):
+        self.path = path
+
+    def performAcquire(self, *args):
+        return self.path
+
+"""
+    This class combines the functionality of the audio splitter
+    and the Speech Recognition Miner in to a single DataMiner object.
+
+    This is the Miner that should be used with the YoutubeDL audio acquirer.
+"""
+class AudioSplitSpeechRecog(DataMiner):
+    def __init__(self, offsetS, languageTag):
+        DataMiner.__init__(self)
+        self.splitter = AudioSplitter(offsetS)
+        self.SRMiner = SpeechRecogMiner(languageTag)
+
+    def build(self, audioPath):
+        # Split audio in to multiple chunks based on offset.
+        listOfPaths = self.splitter.build(audioPath)
+
+        # Populate and return a series of SRTChunk objects.
+        srtChunks = self.SRMiner.build(listOfPaths)
+
+        return srtChunks
+
+"""
+    Function used for test output
+"""
+def pretty_srt_chunk(SRTChunk):
+    """
+        returns a formatted, printable string from it's content.
+
+    :return: pretty SRT chunk string
+    """
+    st = datetime.timedelta(seconds=SRTChunk.startTime)
+    et = datetime.timedelta(seconds=SRTChunk.endTime)
+
+    return ''.join([st.__str__(), ' --> ', et.__str__(), "  ", SRTChunk.content])
 
 if __name__ == '__main__':
 
-    test = "test1"
-
     """
-        Create application with ref to temporary files dir & configure pipeline
+        This test assumes that all data we're working with will be stored in the application
+        temporary directory, so we need only specify file names.
     """
+    # Create application with ref to temporary files dir & configure pipeline
     app = Application('/media/sf_VM_Share/tmp/')
 
-    if test=="test1":
-        audioFile = "How-boredom-can-lead-to-your-most-brilliant-ideas-Manoush-Zomorodi.wav"
+    audioFile = "How-boredom-can-lead-to-your-most-brilliant-ideas-Manoush-Zomorodi.wav"
 
-        # Copy audio file to tmp directory, this would be done with a YoutubeDL acquirer.
-        copyfile('./SpeechRecognition/TestData/' + audioFile,
-                 app.tmpDir + audioFile)
+    # Copy audio file to tmp directory.  In a real scenario, an audio download acquirer
+    # would be used to download audio from a video and return a path to it
+    copyfile('./SpeechRecognition/TestData/' + audioFile,
+             app.tmpDir + audioFile)
 
-        """
-            This test assumes that all data we're working with will be stored in the application
-            temporary directory, so we need only specify file names.
-        """
+    # Set up a string repeater acquirer with a path to the audio file (which just repeats a given string)
+    app.pl.addAcquirer(StringRepeater(app.tmpDir + audioFile), 'repeater')
 
-        # Set up a 'wavToChunks' acquirer to split an audio file in to new files, each one 3 seconds long
-        app.pl.addAcquirer(AudioSplitter(offsetS=3), 'audioSplitter')
-        # Instantiate a Speech Recognition miner, setting the language code
-        app.pl.addMiner(SpeechRecogMiner(language='en-US'),'SRMiner')
+    # Add a SRMiner
+    app.pl.addMiner(AudioSplitSpeechRecog(offsetS=3,languageTag='en-US'), 'SRMiner')
 
-        app.pl.reportStatus()
+    app.pl.reportStatus()
 
-        """
-            Build a corpus of SRT chunks with the SR Miner
-        """
-        # Build a corpus of SRT chunks with using the audio acquirer and SRMiner
-        print "Building a corpus of SRT chunks with the SR Miner and Acquirer"
-        app.acquireAndBuildCorpus('audioSplitter', 'SRMiner', 'SRCorpus', audioFile)
-        app.pl.reportStatus()
+    """
+        Build a corpus of SRT chunks with the SR Miner
+    """
+    # Build a corpus of SRT chunks with using the audio acquirer and SRMiner
+    print "Building a corpus of SRT chunks with the SR Miner and Acquirer"
+    #app.acquireAndBuildCorpus('audioSplitter', 'SRMiner', 'SRCorpus', audioFile)
+    app.pl.acquireAndBuildCorpus('repeater', 'SRMiner', 'SRCorpus')
 
-        # Clean temp dir contents (without deleting the dir)
-        app.clean()
+    app.pl.reportStatus()
 
-        print "Corpus Entries:"
-        # Check the corpus directly
-        SRTChunks = app.pl.corpus['SRCorpus']
+    # Clean temp dir contents (without deleting the dir)
+    app.clean()
 
-        # Print all chunks
-        for c in SRTChunks:
-            print c
+    print "Corpus Entries:"
+    # Check the corpus directly
+    SRTChunks = app.pl.corpus['SRCorpus']
 
-    elif test == "test2":
-        url = 'https://www.youtube.com/watch?v=VO6XEQIsCoM'
-        app.pl.addAcquirer(Audio_DL_split(app.tmpDir, offsetS=3), 'audioDLSplit')
-        # Instantiate a Speech Recognition miner, setting the language code
-        app.pl.addMiner(SpeechRecogMiner(language='en-US'), 'SRMiner')
+    # Print all chunks
+    for c in SRTChunks:
+        print pretty_srt_chunk(c)
 
-        app.acquireAndBuildCorpus('audioDLSplit', 'SRMiner', 'SRCorpus', url)
-        app.pl.reportStatus()
-
-        app.clean()
-
-        print "Corpus Entries:"
-        # Check the corpus directly
-        SRTChunks = app.pl.corpus['SRCorpus']
-
-        # Print all chunks
-        for c in SRTChunks:
-            print c
-
-
-    # More processing...
-
-    # Delete temp dir and contents now application cycle has finished.
-    app.clear()
-
-    def getTimestamp(self, timedelta):
-        """
-
-        :param timedelta: datetime.timedelta object
-        :return: string timestamp in the format: "HH:MM:SS"
-        """
-        s = timedelta.total_seconds()
-        hours, remainder = divmod(s, 3600)
-        minutes, seconds = divmod(remainder, 60)
-
-        return "{0}:{1}:{2}".format(hours, minutes, seconds)
 
 
 
