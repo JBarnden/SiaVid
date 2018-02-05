@@ -1,5 +1,16 @@
 from threading import Thread
 
+class Timeline:
+	""" Holds a series of steps used in generating and
+		searching a timeline
+	"""
+
+	def __init__(self, prettyName="", acquirer=None, miner=None, search=None):
+		self.prettyName = prettyName
+		self.acquirer = acquirer
+		self.miner = miner
+		self.search = search
+		
 class Acquirer:
 	""" Basic definition for data acquisition class """
 
@@ -292,3 +303,12 @@ class Pipeline:
 
 	def getMinerStatus(self, minerTag):
 		return self.mine[minerTag].checkStatus()
+
+	def generateTimeline(timeline, *acquireArgs):
+
+		if type(timeline.miner) == list:
+			pl.acquireAndBuildCorpus(timeline.acquirer, timeline.miner[0], timeline.corpus[0], *acquireArgs)
+			for index in range(1, len(timeline.miner)):
+				pl.reprocess(timeline.miner[index], timeline.corpus[index-1], timeline.corpus[index])
+		else:
+			pl.acquireAndBuildCorpus(timeline.acquirer, timeline.miner, timeline.corpus, *acquireArgs)

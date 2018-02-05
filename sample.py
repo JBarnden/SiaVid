@@ -5,20 +5,12 @@ from time import sleep
 
 from flask import Flask, request, make_response, redirect
 
-from pipeline import Pipeline
+from pipeline import Pipeline, Timeline
 from exampleplugins import VSSChunkMiner, TrieMiner, TrieSearch, ReadFileAcquirer, YoutubeSRTAcquirer, FileToLineMiner
 
 app = Flask(__name__, static_url_path='', static_folder=getcwd() + '/Frontend-Web')
 
 # TODO: Some kind of binding of 'url' setting to source IP. Or passing during search possibly?
-
-class Timeline:
-    def __init__(self):
-        self.acquirer = None
-        self.miner = None
-        self.search = None
-        self.prettyName = ""
-        self.acquireArgs = ""
 
 pl = Pipeline()
 timelines = {}
@@ -120,22 +112,12 @@ def doAcquire(timeline):
         global url
         result = timeline
 
-        t = Thread(target=generateTimeline, args=(timelines[timeline], url))
+        t = Thread(target=pl.generateTimeline, args=(timelines[timeline], url))
         t.start()
 
     resp = make_response(json.dumps(result))
     resp.headers['Access-Control-Allow-Origin'] = '*'
     return resp
-
-def generateTimeline(timeline, *acquireArgs):
-
-    if type(timeline.miner) == list:
-        pl.acquireAndBuildCorpus(timeline.acquirer, timeline.miner[0], timeline.corpus[0], *acquireArgs)
-        for index in range(1, len(timeline.miner)):
-            pl.reprocess(timeline.miner[index], timeline.corpus[index-1], timeline.corpus[index])
-    else:
-        pl.acquireAndBuildCorpus(timeline.acquirer, timeline.miner, timeline.corpus, *acquireArgs)
-
 
 # Initial setup stuff...
 
