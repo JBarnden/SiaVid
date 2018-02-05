@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Video Search Engine</title>
+
+    <script src="./scripts.js"></script>
+    <link rel="stylesheet" href="./player.css">
+  </head>
+
+  <body>
+    <div class="ifbackground">
+
+      <div id="interface" class="interface">
+        <div class="inputs">
+          <form class="formspan">
+            <input type="text" size="40" placeholder="New video URL" id="uri">
+            <input type="button" value="Load video" onclick="loadNewVideo()">
+          </form>
+        </div>
+
+        <div id="player"></div><!-- <iframe> video player replaces  this <div> tag. -->
+
+        <div class="inputs">
+          <form class="formspan">
+            <select name="Types" id="types" placeholder="Type of timeline">
+              <option value="default">Available timelines...</option>
+            </select>
+            <input type="button" value="Add" onclick="addNewTimeline()"><br>
+
+            <input type="text" size="40" placeholder="Search terms" id="searchterms">
+            <input type="button" value="Search" onclick="executeSearch()">
+          </form>
+        </div>
+
+
+      <div id="timelines">
+        <div class="timelineFrame" id="default">
+          <div class="timeline" id="timeline">
+            <div class="scrubber" id="scrubber" title="Drag Me"></div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+    </div>
+  </body>
+</html>

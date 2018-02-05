@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 class TrieNode:
 	def __init__(self):
 		self.content = []

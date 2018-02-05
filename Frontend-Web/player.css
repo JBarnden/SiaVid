@@ -1,0 +1,63 @@
+body {
+      width: 100%; text-align: center;
+}
+
+.ifbackground {
+      width: 90%; min-width: 700px; margin: auto;
+}
+.interface {
+      padding: 10px; background-color: #ccccdd; border-radius: 15px;
+}
+
+.inputs {
+      margin: auto; padding-bottom: 5px; width: 70%;
+}
+.formspan input[type=button] {
+      width: 14ch; font-weight: bold;
+}
+.formspan {
+      text-align: right; width: 53ch; margin: auto; padding: 10px;
+      margin-top: 3px; border: 1px solid black; border-radius: 15px;
+      background-color: white;
+}
+
+
+#timelines {
+      position: relative; bottom: 0%; padding: 5px;
+      background-color: #DFDFDF; border: 3px double #444455;
+      border-radius: 5px;
+}
+.timelineFrame {
+      position: relative; left: 5%; width: 90%; margin-top: 10px;
+      margin-bottom: 15px; text-align: left; font-family: arial;
+}
+.timeline {
+      position: relative; left: 0%; width: 100%; height: 30px;
+      background-color: #aaaadd; margin-top: 10px;
+      margin-bottom: 10px; border-top: 2px solid black;
+      border-bottom: 2px solid black;
+}
+.scrubber {
+      position: absolute; left: 0.3%; top: -25%; height: 150%;
+      width: 15px; border-radius:20%; background-color: #444455;
+      cursor: move; z-index: 1;
+}
+
+.title {
+      font-size: 60%;
+}
+
+.dependentTimeline {
+      position: relative; left: 0%; width: 100%; height: 15px;
+      background-color: #aaaabb; margin-bottom: 10px;
+      border-top: 2px solid black; border-bottom: 2px solid black;
+}
+.dependentScrubber {
+      position: absolute; left: 0.3%; top: 1%; height: 96%; width: 5px;
+      border-radius:20%; background-color: #444455; z-index: 1;
+}
+
+.highlightField {
+      position: absolute; top: 15%; height: 70%; min-width: 3px;
+      background-color: #ffff00;
+}

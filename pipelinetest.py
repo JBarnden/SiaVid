@@ -10,7 +10,7 @@ print ""
 print "### Register and test a data miner that just splits input on 'e':"
 print ""
 
-pipe.addMiner(DataMinerAdapter(SplitDataMiner()), 'test')
+pipe.addMiner(SplitDataMiner(), 'test')
 
 pipe.rawData['test'] = ["test"]
 print pipe.rawData['test']
@@ -25,11 +25,11 @@ print "### Add a ReadFileAcquirer and check for existence, test it provides corr
 print "" 
 
 # Add a ReadFileAcquirer acquisition module
-pipe.addAcquirer(AcquirerAdapter(ReadFileAcquirer()), 'test')
+pipe.addAcquirer(ReadFileAcquirer(), 'test')
 print "Current Acquirers:", pipe.listAcquirers()		# Confirm acquirer added correctly
 
 # Acquire data, test it's been returned correctly
-pipe.performAcquire('test', './Inception.srt')
+pipe.performAcquire('test', './testdata/Inception.srt')
 print len(pipe.rawData['test'])
 print "Line 208:", pipe.rawData['test'][208]
 
@@ -51,7 +51,7 @@ pipe.corpus['Test'] = ["This is a first line"]
 pipe.performSearch("Test", "thing", "e")
 
 # add a search method
-pipe.addSearch(SearchAdapter(SearchInFirstLine()), "firstline")
+pipe.addSearch(SearchInFirstLine(), "firstline")
 print "Current Searches:", pipe.listSearch()
 
 # Add a test corpus and search within it using the search method tagged 'firstline'
@@ -68,17 +68,17 @@ pipe = Pipeline()
 
 filename = 'somefile'
 
-pipe.addAcquirer(AcquirerAdapter(PassThroughAcquirer()), 'readfile')
-pipe.addMiner(DataMinerAdapter(SRTTrieMiner()), 'trie')
-pipe.addSearch(SearchAdapter(TrieSearch()), 'triesearch')
+pipe.addAcquirer(PassThroughAcquirer(), 'readfile')
+pipe.addMiner(SRTTrieMiner(), 'trie')
+pipe.addSearch(TrieSearch(), 'triesearch')
 
 # use the readfile acquirer to read Inception.srt, process it into a search corpus with the chunkify data miner and store it in 'spokenword'.
 
-pipe.acquireAndBuildCorpus('readfile', 'trie', 'trie', './Inception.srt')
+pipe.acquireAndBuildCorpus('readfile', 'trie', 'trie', './testdata/Inception.srt')
 
 # can also be done as two steps:
 
-#pipe.performAcquire('readfile', './Inception.srt')
+#pipe.performAcquire('readfile', './testdata/Inception.srt')
 #pipe.buildCorpus('trie', 'trie', 'readfile')
 
 # Now we can search the trie corpus with the triesearch search engine and provided search terms...
