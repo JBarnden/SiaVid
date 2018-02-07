@@ -6,16 +6,17 @@ This project seeks to provide an extensible, plugin-based means of extracting da
 
 * [Dependencies](#markdown-header-dependencies)
 * [Pipeline](#markdown-header-pipeline)
-  * [Storage](#markdown-header-storage)
-  * [Calling](#markdown-header-calling)
+    * [Storage](#markdown-header-storage)
+    * [Calling](#markdown-header-calling)
 * [Plugins](#markdown-header-plugins)
 * [Plugin Interfaces](#markdown-header-plugin-interfaces)
-  * [Acquirer](#markdown-header-acquirer)
-  * [DataMiner](#markdown-header-dataminer)
-  * [SearchEngine](#markdown-header-searchengine)
+    * [Acquirer](#markdown-header-acquirer)
+    * [DataMiner](#markdown-header-dataminer)
+    * [SearchEngine](#markdown-header-searchengine)
 * [Building a Pipeline](#markdown-header-building-a-pipeline)
-  * [Example 1](#markdown-header-example-1)
-  * [Example 2](#markdown-header-example-2)
+    * [Example 1](#markdown-header-example-1)
+    * [Example 2](#markdown-header-example-2)
+* [Timelines](#markdown-header-timelines)
 
 ## Dependencies
 
@@ -41,11 +42,35 @@ The pipeline is populated with various plugins and provides a unified way to cal
 
     * `rawData{}` holds the output of an `Acquirer`, indexed by `acquireTag`
     * `corpus{}` holds the output of a `DataMiner`, indexed by `corpusTag`
+
 * Outside the pipeline:
     * The defined temp directory (default `'./tmp/'`) holds interstitial files.
     * The storage directory (default `'./store/'`) may hold saved corpuses at a future time.
 
 Large corpuses should be cleared when no longer necessary, by calling `clearCorpus(corpusTag)`. Data stored in the temp directory can be periodically cleared using standard system tools.
+
+### Status
+
+TODO: Implement status codes. Discuss necessary codes.
+
+Certain integer status constants are provided as part of `pipeline.py`:
+
+  * `READY`
+
+    All operation of this plugin is complete and all data has been acquired.
+
+  * `WAIT`
+
+    The plugin is currently acting to acquire or process data.
+
+  * `ERROR`
+
+    The plugin failed somehow; this also implies `OUT_OF_DATE`.
+
+  * `OUT_OF_DATE`
+
+    Any data that currently exists for this plugin can be safely overwritten.  New plugins should set their status to `OUT_OF_DATE` in their constructors.
+
 
 ### Calling
 
@@ -178,17 +203,18 @@ pipeline.performSearch('triesearch', 'triesearch', ['term1', 'term2'])
 
 ## Timelines
 
-`Timeline`s provide a succint way of specifying functionality as one bundled end-to-end process.  It allows for the specification of a given timeline's user-friendly name, the timeline's `Acquirer` and `SearchEngine`, and any `DataMiner`s that are involved in producing searchable output.  The `Pipeline.generateTimeline()` method handles producing a corpus using a `Timeline` specification.
+The `Timeline` provides a succint way of specifying functionality as one bundled end-to-end process.  It allows for the specification of a given timeline's user-friendly name, the timeline's `Acquirer` and `SearchEngine`, and any `DataMiner`s that are involved in producing searchable output.  The `Pipeline.generateTimeline()` method handles producing a corpus using a `Timeline` specification.
 
 In this format, the timeline specified in [example 2](#markdown-header-example-2) might be written thus:
 
 ```python
-ytAudioRec = Timeline()
-ytAudioRec.prettyName = "Youtube Audio Speech Recognition" # user-friendly name
-ytAudioRec.acquirer = 'ytaudio'
-ytAudioRec.miner = ['voicerec', 'triemine'] # Data miners to apply, in order
-ytAudioRec.corpus = ['srtchunk', 'triesearch'] # intermediary corpuses to use, in order
-ytAudioRec.search = 'triesearch'
+ytAudioRec = Timeline(
+  "Youtube Audio Speech Recognition", # user-friendly name
+  'ytaudio',                          # acquirerTag
+  ['voicerec', 'triemine'],           # minerTags to apply, in order
+  ['srtchunk', 'triesearch'],         # intermediary corpusTags to use, in order
+  'triesearch'                        # searchTag to use
+)
 
 pipeline.generateTimeline(ytAudioRec, 'https://www.youtube.com/watch?v=SOMEID') # generate the corpus
 >>> Acquiring to data 'ytaudio' using Acquirer 'ytaudio'
@@ -198,6 +224,39 @@ pipeline.generateTimeline(ytAudioRec, 'https://www.youtube.com/watch?v=SOMEID') 
 
 pipeline.performSearch(ytAudioRec.search, ytAudioRec.corpus[-1], ['term1', 'term2'])
 >>> Performing search on corpus 'trieminer' with engine 'triesearch', terms '['term1', 'term2']'
+```
+
+TODO: Implement status-aware calls in Pipeline's methods.
+
+More than one `Timeline` can use the same intermediate corpuses.  If for instance the above timeline had been generated and a secondary timeline wanted to use the downloaded `ytaudio` source data in its own data mining:
+
+```python
+ytAudioVol = Timeline(
+  "Youtube Volume Grapher",
+  'ytaudio',
+  'volumereader',
+  'volumereader',
+  'volumesearch'
+)
+
+pipeline.generateTimeline(ytAudioVol, 'https://www.youtube.com/watch?v=SOMEID') # generate the corpus
+>>> rawData for 'ytaudio' already exists; skipping acquire
+>>> Building corpus 'volumereader' from rawData 'ytaudio' using miner 'volumereader'
+>>> Done.
+
+pipeline.performSearch(ytAudioVol.search, ytAudioRec.corpus[-1], ['term1', 'term2'])
+>>> Performing search on corpus 'volumereader' with engine 'volumesearch', terms '['term1', 'term2']'
+```
+
+If the desired data was in the process of being acquired but had not completed:
+
+```python
+pipeline.generateTimeline(ytAudioVol, 'https://www.youtube.com/watch?v=SOMEID') # generate the corpus
+>>> Acquire for 'ytaudio' already in progress; waiting...
+>>> Waiting...
+...
+>>> Building corpus 'volumereader' from rawData 'ytaudio' using miner 'volumereader'
+>>> Done.
 ```
 
 `Pipeline.generateTimeline()` can be called either synchronously or asynchronously by the application:
