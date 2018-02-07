@@ -5,10 +5,11 @@ class Timeline:
 		searching a timeline
 	"""
 
-	def __init__(self, prettyName="", acquirer=None, miner=None, search=None):
+	def __init__(self, prettyName="", acquirer=None, miner=None, corpus=None, search=None):
 		self.prettyName = prettyName
 		self.acquirer = acquirer
 		self.miner = miner
+		self.corpus = corpus
 		self.search = search
 		self.status = 0
 		
