@@ -132,18 +132,29 @@ if __name__ == "__main__":
 
     # we pre-specify the timelines we want to offer...
 
-    timelines['subtitles'] = Timeline()
-    timelines['subtitles'].prettyName = "Downloaded Subtitles"
-    timelines['subtitles'].acquirer = 'ytsub'
-    timelines['subtitles'].miner = ['fileline', 'vssminer', 'trieminer']
-    timelines['subtitles'].corpus = ['fileline', 'vssminer', 'trieminer']
-    timelines['subtitles'].search = 'triesearch'
+    timelines['subtitles'] = Timeline(
+        "Downloaded Subtitles",                 # prettyName
+        'ytsub',                                # acquireTag
+        ['fileline', 'vssminer', 'trieminer'],  # minerTags in order
+        ['fileline', 'vssminer', 'trieminer'],  # corpusTags in order
+        'triesearch'                            # searchTag
+    )
 
-    # timelines['speechrec'] = Timeline()
-    # timelines['speechrec'].prettyName = "Speech Recognition"
-    # timelines['speechrec'].acquirer = 'ytaudiochunker'
-    # timelines['speechrec'].miner = ['speechrec', 'trieminer']
-    # timelines['speechrec'].corpus = ['speechrec', 'trieminer']
-    # timelines['subtitles'].search = 'triesearch'
+    # timelines['speechrec'] = Timeline(
+    #     "Speech Recognition",
+    #     'ytaudiochunker',
+    #     ['speechrec', 'trieminer'],
+    #     ['speechrec', 'trieminer'],
+    #     'triesearch'
+    # )
+
+    # timelines['someother'] = Timeline(
+    #     "Some Other Timeline",
+    #     'ytaudiochunker',
+    #     ['speechrec', 'trieminer'],
+    #     ['speechrec', 'trieminer'],
+    #     'triesearch'
+    # )
+
 
     app.run(host='0.0.0.0', use_reloader=True, threaded=True)
