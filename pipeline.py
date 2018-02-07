@@ -10,6 +10,7 @@ class Timeline:
 		self.acquirer = acquirer
 		self.miner = miner
 		self.search = search
+		self.status = 0
 		
 class Acquirer:
 	""" Basic definition for data acquisition class """
@@ -305,10 +306,14 @@ class Pipeline:
 		return self.mine[minerTag].checkStatus()
 
 	def generateTimeline(self, timeline, *acquireArgs):
-		
+		timeline.status = 1
+
 		if type(timeline.miner) == list:
 			self.acquireAndBuildCorpus(timeline.acquirer, timeline.miner[0], timeline.corpus[0], *acquireArgs)
 			for index in range(1, len(timeline.miner)):
 				self.reprocess(timeline.miner[index], timeline.corpus[index-1], timeline.corpus[index])
 		else:
 			self.acquireAndBuildCorpus(timeline.acquirer, timeline.miner, timeline.corpus, *acquireArgs)
+
+		print "Done."
+		timeline.status = 0
