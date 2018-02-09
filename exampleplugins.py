@@ -1,4 +1,4 @@
-from pipeline import DataMiner, SearchEngine, Acquirer
+from pipeline import DataMiner, SearchEngine, Acquirer, OUT_OF_DATE, WAIT, READY, ERROR
 from time import sleep
 
 class SplitDataMiner(DataMiner):
@@ -77,6 +77,7 @@ class YoutubeSRTAcquirer(Acquirer):
     		'quiet': True,
 		}
 		self.tempdir = tempdir
+		self.status = OUT_OF_DATE
 
 	def setOptions(self, opts):
 		self.ydl_opts = opts
