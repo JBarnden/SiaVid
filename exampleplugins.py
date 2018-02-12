@@ -81,7 +81,7 @@ class YoutubeSRTAcquirer(Acquirer):
 
 	def filenameCatcher(self, event):
 		if event['status'] == 'finished':
-			filename = event['filename']
+			self.subfilename = event['filename']
 			print "File downloaded to", self.tempdir + self.subfilename
 
 	def setOptions(self, opts):
@@ -93,7 +93,6 @@ class YoutubeSRTAcquirer(Acquirer):
     
 		with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
 			result = ydl.download(url)
-		
 		return self.subfilename
 
 class FileToLineMiner(DataMiner):
