@@ -1,4 +1,4 @@
-from threading import Thread, current_thread
+from threading import Thread, current_thread, Lock
 from time import sleep
 
 READY = 0
@@ -25,20 +25,22 @@ class Acquirer:
 	def __init__(self, tempDir='./tmp/'):
 		self.tempDir = tempDir
 		self.status = OUT_OF_DATE
+		self.lock = Lock()
 
 	def performAcquire(self, *args):
 		""" calls self.acquire() in this thread """
 
-		self.status = WAIT
-		result = self.acquire(*args)
-		
-		if type(result) == tuple:
-			self.status = result[1]
-			result = result[0]
-		else:
-			self.status = READY
+		with self.lock:
+			self.status = WAIT
+			result = self.acquire(*args)
+			
+			if type(result) == tuple:
+				self.status = result[1]
+				result = result[0]
+			else:
+				self.status = READY
 
-		return result
+			return result
 
 	def performAsyncAcquire(self, target, *args):
 		""" Calls self.acquire() in another thread """
@@ -54,16 +56,16 @@ class Acquirer:
 			args is any acquirer arguments
 			target is a tuple of (rawDataDict, acquireTag)
 		"""
-
-		self.status = WAIT
-		result = self.acquire(*args)
-		
-		if type(result) == tuple:
-			target[0][target[1]] = result[0]
-			self.status = result[1]
-		else:
-			target[0][target[1]] = result
-			self.status = READY
+		with self.lock:
+			self.status = WAIT
+			result = self.acquire(*args)
+			
+			if type(result) == tuple:
+				target[0][target[1]] = result[0]
+				self.status = result[1]
+			else:
+				target[0][target[1]] = result
+				self.status = READY
 
 	def acquire(self, *args):
 		""" Do something to acquire data. 
@@ -107,20 +109,22 @@ class DataMiner:
 	def __init__(self, tempDir='./tmp/'):
 		self.tempDir = tempDir
 		self.status = OUT_OF_DATE
+		self.lock = Lock()		
 
 	def buildCorpus(self, args):
 		""" calls self.build() in this thread """
 
-		self.status = WAIT
-		result = self.build(args)
-		
-		if type(result) == tuple:
-			self.status = result[1]
-			result = result[0]
-		else:
-			self.status = READY
+		with self.lock:
+			self.status = WAIT
+			result = self.build(args)
+			
+			if type(result) == tuple:
+				self.status = result[1]
+				result = result[0]
+			else:
+				self.status = READY
 
-		return result
+			return result
 
 	def buildAsyncCorpus(self, target, data):
 		""" Starts a thread to run doBuild asynchronously with
@@ -138,16 +142,16 @@ class DataMiner:
 			data is data to be processed in some way
 			target is a tuple of (corpusDict, corpusTag)
 		"""
+		with self.lock:
+			self.status = WAIT
+			result = self.build(data)
 
-		self.status = WAIT
-		result = self.build(data)
-
-		if type(result) == tuple:
-			target[0][target[1]] = result[0]
-			self.status = result[1]
-		else:
-			target[0][target[1]] = result
-			self.status = READY
+			if type(result) == tuple:
+				target[0][target[1]] = result[0]
+				self.status = result[1]
+			else:
+				target[0][target[1]] = result
+				self.status = READY
 
 	def build(self, data):
 		""" Do something to convert data from an Acquirer
@@ -330,7 +334,7 @@ class Pipeline:
 		for miner in reversed(timeline.miner):
 			if self.getMinerStatus(miner) == WAIT:
 				break # stop if we find one in WAIT
-
+			print "Setting", miner, "to OUT_OF_DATE..."
 			self.setMinerStatus(miner, OUT_OF_DATE)
 		else:
 			if self.getAcquireStatus(timeline.acquirer) != WAIT:
@@ -343,13 +347,7 @@ class Pipeline:
 			timeline for search, and updates its status as necessary.
 		"""
 
-		# TODO: This needs to be made properly thread-safe.
-		# TODO: Proper error handling. Implementation of resetTimeline().
-		# TODO: Should walk backwards through data miners to find the
-		# earliest that still needs to be acted upon, and start from 
-		# there:
-		# step0: done, step1: done, step2: not done, step3: not done:
-		# --> step2
+		# TODO: Proper error handling.
 
 		t = current_thread().name
 		timeline.status = WAIT
@@ -364,12 +362,10 @@ class Pipeline:
 			result = self.performAcquire(timeline.acquirer, *acquireArgs)
 
 		# wait for existing acquire to finish
-		elif status == WAIT:
-			print "{} Waiting for acquirer {}...".format(t, timeline.acquirer)
+		if self.getAcquireStatus(timeline.acquirer) == WAIT:
+			print "{} Waiting for acquirer {} to complete...".format(t, timeline.acquirer)
 			while self.getAcquireStatus(timeline.acquirer) == WAIT:
 				sleep(0.2)
-		else:
-			print "{} Acquire already done.".format(t, timeline.prettyName)
 
 		# Did acquisition complete successfully?
 		if self.getAcquireStatus(timeline.acquirer) == ERROR:
@@ -377,58 +373,44 @@ class Pipeline:
 			timeline.status = ERROR
 			return 
 
-		# Are we dealing with a single DataMiner or a list?
-		if type(timeline.miner) == list:
+		# Ensure we always have a list of DataMiners
+		if type(timeline.miner) != list:
+			timeline.miner = [timeline.miner]
 
-			# only perform initial mine if one is not already in progress
+		status = self.getMinerStatus(timeline.miner[0])
+
+		# only perform initial mine if one is not already in progress
+		if status == OUT_OF_DATE or status == ERROR:
+			result = self.buildCorpus(timeline.miner[0], timeline.corpus[0], timeline.acquirer)
+
+		# wait for prior mine to complete	
+		if self.getMinerStatus(timeline.miner[0]) == WAIT:
+			print "{} Waiting for miner {}...".format(t, timeline.miner[0])
+			while self.getMinerStatus(timeline.miner[0]) == WAIT:
+				sleep(0.2)
+
+		# Did the prior mine complete successfully?
+		if self.getMinerStatus(timeline.miner[0]) == ERROR:
+			print "{} Error in miner {}.".format(t, timeline.miner[0])
+			timeline.status = ERROR
+			return
+
+		# process remaining miner steps, if any
+		for index in range(1, len(timeline.miner)):
+			status = self.getMinerStatus(timeline.miner[index])
+
 			if status == OUT_OF_DATE or status == ERROR:
-				result = self.buildCorpus(timeline.miner[0], timeline.corpus[0], timeline.acquirer)
+				result = self.reprocess(timeline.miner[index], timeline.corpus[index-1], timeline.corpus[index])
 
-			# wait for prior mine to complete	
-			elif status == WAIT:
-				print "{} Waiting for miner {}...".format(t, timeline.miner[0])
-				while self.getMinerStatus(timeline.miner[0]) == WAIT:
+			if self.getMinerStatus(timeline.miner[index]) == WAIT:
+				while self.getMinerStatus(timeline.miner[index]) == WAIT:
+					print "{} Waiting for miner '{}'...".format(t, timeline.miner[index])
 					sleep(0.2)
 
-			else:
-				print "{} '{}' already done; skipping".format(t, timeline.corpus[0])
-
-			if self.getMinerStatus(timeline.miner[0]) == ERROR:
-				print "{} Error in miner {}.".format(t, timeline.miner[0])
+			if self.getMinerStatus(timeline.miner[index]) == ERROR:
+				print "{} Error in miner {}.".format(t, timeline.miner[index])
 				timeline.status = ERROR
 				return
-
-			# process remaining miner steps
-
-			for index in range(1, len(timeline.miner)):
-				status = self.getMinerStatus(timeline.miner[index])
-
-				if status == OUT_OF_DATE or status == ERROR:
-					result = self.reprocess(timeline.miner[index], timeline.corpus[index-1], timeline.corpus[index])
-				elif status == WAIT:
-					while self.getMinerStatus(timeline.miner[index]) == WAIT:
-						print "{} Waiting for miner '{}'...".format(t, timeline.miner[index])
-						sleep(0.2)
-				else:
-					print "{} '{}' already done; skipping".format(t, timeline.corpus[index])
-
-				if self.getMinerStatus(timeline.miner[index]) == ERROR:
-					print "{} Error in miner {}.".format(t, timeline.miner[index])
-					timeline.status = ERROR
-					return
-
-		else:
-			status = self.getMinerStatus(timeline.miner)
-
-			# only perform mine if one is not already in progress
-			if status == OUT_OF_DATE or status == ERROR:
-				result = self.buildCorpus(timeline.miner, timeline.corpus, timeline.acquirer)
-
-			# wait for prior mine to complete
-			elif status == WAIT:
-				while self.getMinerStatus(timeline.miner) == WAIT:
-					sleep(0.2)
-
 
 		print "{} {} done.".format(t, timeline.prettyName)
 		timeline.status = result
