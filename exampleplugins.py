@@ -69,15 +69,14 @@ class PassThroughAcquirer(Acquirer):
 import youtube_dl
 
 class YoutubeSRTAcquirer(Acquirer):
-	def __init__(self, tempdir='./tmp/'):
+	def __init__(self, tempDir='./tmp/'):
+		Acquirer.__init__(self, tempDir)
 		self.ydl_opts = {
 			'writeautomaticsub': True,
     		'outtmpl': unicode('./tmp/%(id)s.%(ext)s'),
     		'skip_download': True,
     		'quiet': True,
 		}
-		self.tempdir = tempdir
-		self.status = OUT_OF_DATE
 
 	def setOptions(self, opts):
 		self.ydl_opts = opts
@@ -88,7 +87,7 @@ class YoutubeSRTAcquirer(Acquirer):
 		with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
 			result = ydl.download(url)
 			
-		subfilename = self.tempdir + url[0].split("=")[1] + '.en.vtt'
+		subfilename = self.tempDir + url[0].split("=")[1] + '.en.vtt'
 		return subfilename
 
 class FileToLineMiner(DataMiner):
