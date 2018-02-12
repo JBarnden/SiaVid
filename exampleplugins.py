@@ -77,18 +77,24 @@ class YoutubeSRTAcquirer(Acquirer):
     		'quiet': True,
 		}
 		self.tempdir = tempdir
+		self.subfilename = ''
+
+	def filenameCatcher(self, event):
+		if event['status'] == 'finished':
+			filename = event['filename']
+			print "File downloaded to", self.tempdir + self.subfilename
 
 	def setOptions(self, opts):
 		self.ydl_opts = opts
+		self.ydl_opts['progress_hooks']=[self.filenameCatcher]
 
 	def acquire(self, *url):
-		subfilename = ''
+		self.subfilename = ''
     
 		with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
 			result = ydl.download(url)
-			
-		subfilename = self.tempdir + url[0].split("=")[1] + '.en.vtt'
-		return subfilename
+		
+		return self.subfilename
 
 class FileToLineMiner(DataMiner):
 	def build(self, data):
