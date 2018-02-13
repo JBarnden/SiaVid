@@ -1,5 +1,12 @@
 from threading import Thread, current_thread, Lock
 from time import sleep
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter('[%(threadName)s] %(message)s'))
+logger.addHandler(handler)
 
 READY = 0
 WAIT = 1
@@ -30,10 +37,10 @@ class Acquirer:
 	def performAcquire(self, *args):
 		""" calls self.acquire() in this thread """
 
-		with self.lock:
+		if self.status != READY:
 			self.status = WAIT
 			result = self.acquire(*args)
-			
+				
 			if type(result) == tuple:
 				self.status = result[1]
 				result = result[0]
@@ -56,7 +63,8 @@ class Acquirer:
 			args is any acquirer arguments
 			target is a tuple of (rawDataDict, acquireTag)
 		"""
-		with self.lock:
+
+		if self.status != READY:
 			self.status = WAIT
 			result = self.acquire(*args)
 			
@@ -114,7 +122,7 @@ class DataMiner:
 	def buildCorpus(self, args):
 		""" calls self.build() in this thread """
 
-		with self.lock:
+		if self.status != READY:
 			self.status = WAIT
 			result = self.build(args)
 			
@@ -142,7 +150,8 @@ class DataMiner:
 			data is data to be processed in some way
 			target is a tuple of (corpusDict, corpusTag)
 		"""
-		with self.lock:
+
+		if self.status != READY:
 			self.status = WAIT
 			result = self.build(data)
 
@@ -193,19 +202,19 @@ class Pipeline:
 	def addAcquirer(self, acquirer, tag):
 		""" Add a new acquirer tagged 'tag' """
 
-		print "Adding acquirer '{0}'.".format(tag)
+		logger.info("Adding acquirer '{0}'.".format(tag))
 		self.acquire[tag] = acquirer
 
 	def removeAcquirer(self, tag):
 		""" Remove the acquirer tagged 'tag' """
 
 		if self.acquire.has_key(tag):
-			print "Deleting acquirer '{0}'.".format(tag)
+			logger.info("Deleting acquirer '{0}'.".format(tag))
 			del self.acquire[tag]
 			if self.rawData.has_key(tag):
 				del self.rawData[tag]
 		else:
-			print "No acquirer '{0}'.".format(tag)
+			logger.error("No acquirer '{0}'.".format(tag))
 
 	def listMiners(self):
 		""" Returns list of currently registered data miners """
@@ -215,17 +224,17 @@ class Pipeline:
 	def addMiner(self, miner, tag):
 		""" Add a new data miner tagged 'tag' """
 
-		print "Adding miner '{0}'.".format(tag)
+		logger.info("Adding miner '{0}'.".format(tag))
 		self.mine[tag] = miner
 
 	def removeMiner(self, tag):
 		""" Remove the data miner tagged 'tag' """
 
 		if self.mine.has_key(tag):
-			print "Deleting miner '{0}'.".format(tag)
+			logger.info("Deleting miner '{0}'.".format(tag))
 			del self.acquire[tag]
 		else:
-			print "No miner '{0}'.".format(tag)
+			logger.error("No miner '{0}'.".format(tag))
 
 	def listSearch(self):
 		""" Returns list of currently registered search engines """
@@ -235,30 +244,30 @@ class Pipeline:
 	def addSearch(self, search, tag):
 		""" Add a new search engine tagged 'tag' """
 
-		print "Adding search '{0}'.".format(tag)
+		logger.info("Adding search '{0}'.".format(tag))
 		self.search[tag] = search
 
 	def removeSearch(self, tag):
 		""" Remove the search engine tagged 'tag' """
 
 		if self.search.has_key(tag):
-			print "Deleting search '{0}'.".format(tag)
+			logger.info("Deleting search '{0}'.".format(tag))
 			del self.search[tag]
 		else:
-			print "No search '{0}'.".format(tag)
+			logger.error("No search '{0}'.".format(tag))
 
 	def performSearch(self, corpusTag, searchTag, searchTerms):
 		""" Perform a search on a given corpus with a given search engine, using searchterms
 			Returns a list of results """
 
-		print "Performing search on corpus '{0}' with engine '{1}', terms '{2}'".format(corpusTag, searchTag, searchTerms)
+		logger.info("Performing search on corpus '{0}' with engine '{1}', terms '{2}'".format(corpusTag, searchTag, searchTerms))
 
 		if not self.search.has_key(searchTag):
-			print "No search '{0}' available.".format(searchTag)
+			logger.error("No search '{0}' available.".format(searchTag))
 			return
 
 		if not self.corpus.has_key(corpusTag):
-			print "No corpus '{0}' available.".format(corpusTag)
+			logger.error("No corpus '{0}' available.".format(corpusTag))
 			return
 
 		return self.search[searchTag].performSearch(self.corpus[corpusTag], searchTerms)
@@ -267,14 +276,20 @@ class Pipeline:
 		""" Performs an Acquire using the tagged Acquirer and stores
 			the results in rawData with the acquirer's tag """
 
-		print "Acquiring to data '{0}' using Acquirer '{1}'".format(acquireTag, acquireTag)
-		self.rawData[acquireTag] = self.acquire[acquireTag].performAcquire(*acquireArgs)
+		t = current_thread().name
+
+		with self.acquire[acquireTag].lock:
+			if self.acquire[acquireTag].status != READY:
+				logger.info("Acquiring to data '{}' using Acquirer '{}'".format(acquireTag, acquireTag))
+				self.rawData[acquireTag] = self.acquire[acquireTag].performAcquire(*acquireArgs)
+			elif self.acquire[acquireTag].status == READY:
+				logger.info("Data '{}' already exists; skipping.".format(acquireTag))
 
 	def performAsyncAcquire(self, acquireTag, *acquireArgs):
 		""" Performs an Acquire using the tagged Acquirer and stores
 			the results in rawData with the acquirer's tag """
 
-		print "Acquiring to data '{0}' using Acquirer '{1}'".format(acquireTag, acquireTag)
+		logger.info("Acquiring to data '{0}' using Acquirer '{1}'".format(acquireTag, acquireTag))
 		target = (self.rawData, acquireTag)
 		self.acquire[acquireTag].performAsyncAcquire(target, *acquireArgs)
 
@@ -287,21 +302,34 @@ class Pipeline:
 	def buildCorpus(self, minerTag, corpusTag, acquireTag):
 		""" Generate a corpus from a given dataset using a given miner """
 
-		print "Building corpus '{0}' from rawData '{1}' using miner '{2}'".format(corpusTag, acquireTag, minerTag)
-		self.corpus[corpusTag] = self.mine[minerTag].buildCorpus(self.rawData[acquireTag])
+		t = current_thread().name
+		
+		with self.mine[minerTag].lock:
+			if self.mine[minerTag].status != READY:
+				logger.info("Building corpus '{}' from rawData '{}' using miner '{}'".format(corpusTag, acquireTag, minerTag))
+				self.corpus[corpusTag] = self.mine[minerTag].buildCorpus(self.rawData[acquireTag])
+			elif self.mine[minerTag].status == READY:
+				logger.info("Corpus '{}' already exists; skipping.".format(corpusTag))
 
 	def buildAsyncCorpus(self, minerTag, corpusTag, acquireTag):
 		""" Generate a corpus from a given dataset using a given miner """
 
-		print "Building corpus '{0}' from rawData '{1}' using miner '{2}'".format(corpusTag, acquireTag, minerTag)
+		logger.info("Building corpus '{0}' from rawData '{1}' using miner '{2}'".format(corpusTag, acquireTag, minerTag))
 		target = (self.corpus, corpusTag)
 		self.mine[minerTag].buildAsyncCorpus(target, self.rawData[acquireTag])
 	
 	def reprocess(self, minerTag, sourceCorpusTag, destCorpusTag):
 		""" Run an existing corpus through a secondary DataMiner """
 
-		print "Reprocessing corpus '{0}' to corpus '{1}' using miner '{2}'".format(sourceCorpusTag, destCorpusTag, minerTag)
-		self.corpus[destCorpusTag] = self.mine[minerTag].buildCorpus(self.corpus[sourceCorpusTag])
+		t = current_thread().name
+
+		with self.mine[minerTag].lock:
+			if self.mine[minerTag].status != READY:
+				logger.info("Reprocessing corpus '{}' to corpus '{}' using miner '{}'".format(sourceCorpusTag, destCorpusTag, minerTag))
+				self.corpus[destCorpusTag] = self.mine[minerTag].buildCorpus(self.corpus[sourceCorpusTag])
+			elif self.mine[minerTag].status == READY:
+				logger.info("Corpus '{}' already exists; skipping.".format(destCorpusTag))
+
 
 	def reportStatus(self):
 		print len(self.acquire), "Acquirers registered:", self.listAcquirers()
@@ -334,7 +362,7 @@ class Pipeline:
 		for miner in reversed(timeline.miner):
 			if self.getMinerStatus(miner) == WAIT:
 				break # stop if we find one in WAIT
-			print "Setting", miner, "to OUT_OF_DATE..."
+			logger.info("Setting {} to OUT_OF_DATE...".format(miner))
 			self.setMinerStatus(miner, OUT_OF_DATE)
 		else:
 			if self.getAcquireStatus(timeline.acquirer) != WAIT:
@@ -355,21 +383,12 @@ class Pipeline:
 		# result will hold ERROR only if this timeline triggered the error
 		result = None
 
-		status = self.getAcquireStatus(timeline.acquirer)
-
-		# only perform acquire if one is not already in progress
-		if status == OUT_OF_DATE or status == ERROR:
-			result = self.performAcquire(timeline.acquirer, *acquireArgs)
-
-		# wait for existing acquire to finish
-		if self.getAcquireStatus(timeline.acquirer) == WAIT:
-			print "{} Waiting for acquirer {} to complete...".format(t, timeline.acquirer)
-			while self.getAcquireStatus(timeline.acquirer) == WAIT:
-				sleep(0.2)
+		# perform our acquire
+		result = self.performAcquire(timeline.acquirer, *acquireArgs)
 
 		# Did acquisition complete successfully?
 		if self.getAcquireStatus(timeline.acquirer) == ERROR:
-			print "{} Error in acquirer {}.".format(t, timeline.acquirer)
+			logger.error("Error in acquirer {}.".format(timeline.acquirer))
 			timeline.status = ERROR
 			return 
 
@@ -377,40 +396,25 @@ class Pipeline:
 		if type(timeline.miner) != list:
 			timeline.miner = [timeline.miner]
 
-		status = self.getMinerStatus(timeline.miner[0])
-
-		# only perform initial mine if one is not already in progress
-		if status == OUT_OF_DATE or status == ERROR:
-			result = self.buildCorpus(timeline.miner[0], timeline.corpus[0], timeline.acquirer)
-
-		# wait for prior mine to complete	
-		if self.getMinerStatus(timeline.miner[0]) == WAIT:
-			print "{} Waiting for miner {}...".format(t, timeline.miner[0])
-			while self.getMinerStatus(timeline.miner[0]) == WAIT:
-				sleep(0.2)
+		# perform initial mine
+		result = self.buildCorpus(timeline.miner[0], timeline.corpus[0], timeline.acquirer)
 
 		# Did the prior mine complete successfully?
 		if self.getMinerStatus(timeline.miner[0]) == ERROR:
-			print "{} Error in miner {}.".format(t, timeline.miner[0])
+			logger.error("Error in miner {}.".format(timeline.miner[0]))
 			timeline.status = ERROR
 			return
 
 		# process remaining miner steps, if any
 		for index in range(1, len(timeline.miner)):
-			status = self.getMinerStatus(timeline.miner[index])
 
-			if status == OUT_OF_DATE or status == ERROR:
-				result = self.reprocess(timeline.miner[index], timeline.corpus[index-1], timeline.corpus[index])
+			result = self.reprocess(timeline.miner[index], timeline.corpus[index-1], timeline.corpus[index])
 
-			if self.getMinerStatus(timeline.miner[index]) == WAIT:
-				while self.getMinerStatus(timeline.miner[index]) == WAIT:
-					print "{} Waiting for miner '{}'...".format(t, timeline.miner[index])
-					sleep(0.2)
-
+			# check for errors
 			if self.getMinerStatus(timeline.miner[index]) == ERROR:
-				print "{} Error in miner {}.".format(t, timeline.miner[index])
+				logger.error("Error in miner {}.".format(timeline.miner[index]))
 				timeline.status = ERROR
 				return
 
-		print "{} {} done.".format(t, timeline.prettyName)
+		logger.info("{} done.".format(timeline.prettyName))
 		timeline.status = result
