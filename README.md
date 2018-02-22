@@ -6,16 +6,17 @@ This project seeks to provide an extensible, plugin-based means of extracting da
 
 * [Dependencies](#markdown-header-dependencies)
 * [Pipeline](#markdown-header-pipeline)
-  * [Storage](#markdown-header-storage)
-  * [Calling](#markdown-header-calling)
+    * [Storage](#markdown-header-storage)
+    * [Calling](#markdown-header-calling)
 * [Plugins](#markdown-header-plugins)
 * [Plugin Interfaces](#markdown-header-plugin-interfaces)
-  * [Acquirer](#markdown-header-acquirer)
-  * [DataMiner](#markdown-header-dataminer)
-  * [SearchEngine](#markdown-header-searchengine)
+    * [Acquirer](#markdown-header-acquirer)
+    * [DataMiner](#markdown-header-dataminer)
+    * [SearchEngine](#markdown-header-searchengine)
 * [Building a Pipeline](#markdown-header-building-a-pipeline)
-  * [Example 1](#markdown-header-example-1)
-  * [Example 2](#markdown-header-example-2)
+    * [Example 1](#markdown-header-example-1)
+    * [Example 2](#markdown-header-example-2)
+* [Timelines](#markdown-header-timelines)
 
 ## Dependencies
 
@@ -34,12 +35,41 @@ The speech recognition plugins rely on TODO: add speech recognition information
 The pipeline is populated with various plugins and provides a unified way to call and pass data between them:
 
 ### Storage
-* `acquire{}` holds a dictionary of `Acquirer`s indexed by `acquireTag`
-* `mine{}` holds a dictionary of `DataMiner`s indexed by `minerTag`
-* `search{}` holds a dictionary of `SearchEngine`s indexed by `searchTag`
+* Inside the pipeline:
+    * `acquire{}` holds a dictionary of `Acquirer`s indexed by `acquireTag`
+    * `mine{}` holds a dictionary of `DataMiner`s indexed by `minerTag`
+    * `search{}` holds a dictionary of `SearchEngine`s indexed by `searchTag`
 
-* `rawData{}` holds the output of an `Acquirer`, indexed by `acquireTag`
-* `corpus{}` holds the output of a `DataMiner`, indexed by `corpusTag`
+    * `rawData{}` holds the output of an `Acquirer`, indexed by `acquireTag`
+    * `corpus{}` holds the output of a `DataMiner`, indexed by `corpusTag`
+
+* Outside the pipeline:
+    * The defined temp directory (default `'./tmp/'`) holds interstitial files.
+    * The storage directory (default `'./store/'`) may hold saved corpuses at a future time.
+
+Large corpuses should be cleared when no longer necessary, by calling `clearCorpus(corpusTag)`. Data stored in the temp directory can be periodically cleared using standard system tools.
+
+### Status
+
+TODO: Implement status codes. Discuss necessary codes.
+
+Certain integer status constants are provided as part of `pipeline.py`:
+
+  * `READY`
+
+    All operation of this plugin is complete and all data has been acquired.
+
+  * `WAIT`
+
+    The plugin is currently acting to acquire or process data.
+
+  * `ERROR`
+
+    The plugin failed somehow; this also implies `OUT_OF_DATE`.
+
+  * `OUT_OF_DATE`
+
+    Any data that currently exists for this plugin can be safely overwritten.  New plugins should set their status to `OUT_OF_DATE` in their constructors.
 
 
 ### Calling
@@ -76,38 +106,46 @@ pipe.performSearch('someCorpus', 'mysearch', ['term3', 'term4'])
 Each plugin has a common interface which specifies how the pipeline talks to it:
 
 ### Acquirer
-* performAcquire(self, *args)
-* performAsyncAcquire(self, target, *args)
-* checkStatus()
-* acquire(self, *args)
 
-    `performAcquire()` exists in the base Acquirer class, and calls the `acquire()` method in the same thread.  This is the blocking version.
+```python
+Acquirer.performAcquire(self, *args)
+Acquirer.performAsyncAcquire(self, target, *args)
+Acquirer.checkStatus(self)
+Acquirer.acquire(self, *args)
+```
 
-    `performAsyncAcquire()` exists in the base Acquirer class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition.  The `checkStatus()` method should be polled for completion of asynchronous acquisition. `target` holds a tuple consisting of a reference to the `rawData` dict, and the tag to be updated within that dict with the results.
+`performAcquire()` exists in the base Acquirer class, and calls the `acquire()` method in the same thread.  This is the blocking version.
 
-    `checkStatus()` exists in the base Acquirer class and returns the current status code of the plugin.
+`performAsyncAcquire()` exists in the base Acquirer class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition.  The `checkStatus()` method should be polled for completion of asynchronous acquisition. `target` holds a tuple consisting of a reference to the `rawData` dict, and the tag to be updated within that dict with the results.
 
-    `acquire()` should be implemented in each class that inherits from Acquirer to allow for some kind of acquisition specific to that class; for instance the `PassThroughAcquirer` makes a copy of the supplied file in the './tmp/' folder and returns the path of this new file.  It should return data to be entered into the `rawData` dictionary and a return code (`0` is assumed if none is specified).
+`checkStatus()` exists in the base Acquirer class and returns the current status code of the plugin.
+
+`acquire()` should be implemented in each class that inherits from `Acquirer` to allow for some kind of acquisition specific to that class; for instance the `PassThroughAcquirer` makes a copy of the supplied file in the `'./tmp/'` folder and returns the path of this new file.  It should return the data to be entered into the `rawData` dictionary and a return code (`0` is assumed if none is specified).
 
 ### DataMiner
-* buildCorpus(self, data)
-* buildAsyncCorpus(self, data)
-* checkStatus()
-* build(self, data)
 
-    `buildCorpus()` exists in the base class and calls the `build()` method in the same thread.  This is the blocking version.
+```python
+DataMiner.buildCorpus(self, data)
+DataMiner.buildAsyncCorpus(self, data)
+DataMiner.checkStatus(self)
+DataMiner.build(self, data)
+```
 
-    `buildAsyncCorpus()` exists in the base DataMiner class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition. The `checkStatus()` method should be polled for completion of asynchronous acquisition.  `target` holds a tuple consisting of a reference to the `corpus` dict, and the tag to be updated within that dict with the results.
+`buildCorpus()` exists in the base class and calls the `build()` method in the same thread.  This is the blocking version.
 
-    `checkStatus()` exists in the base DataMiner class and returns the current status code of the plugin.
+`buildAsyncCorpus()` exists in the base DataMiner class, and calls the `acquire()` method in a new thread, to allow for non-blocking acquisition. The `checkStatus()` method should be polled for completion of asynchronous acquisition.  `target` holds a tuple consisting of a reference to the `corpus` dict, and the tag to be updated within that dict with the results.
 
-    `build()` should be implemented in each class that inherits from DataMiner to allow for some kind of corpus processing specific to that class, for instance the `SRTTrieMiner` processes a .srt file into a list of `SRTChunk`s and a trie containing references to those chunks. It should return data to be entered into the `corpus` dictionary and a return code (`0` is assumed if none is specified).
+`checkStatus()` exists in the base DataMiner class and returns the current status code of the plugin.
+
+`build()` should be implemented in each class that inherits from `DataMiner` to allow for some kind of corpus processing specific to that class, for instance the `SRTTrieMiner` processes a .srt file into a list of `SRTChunk`s and a `Trie` containing references to those chunks. It should return data to be entered into the `corpus` dictionary and a return code (`0` is assumed if none is specified).
 
 ### SearchEngine
 
-* performSearch(self, corpus, terms)
+```Python
+SearchEngine.performSearch(self, corpus, terms)
+```
 
-    `performSearch()` should be implemented in each class that inherits from SearchEngine to allow for some kind of search specific to that class, for instance the `TrieSearch` searches a trie containing references to `SRTChunk`s for given terms and returns results.
+`performSearch()` should be implemented in each class that inherits from `SearchEngine` to allow for some kind of search specific to that class, for instance the `TrieSearch` searches a `Trie` containing references to `SRTChunk`s for given terms and returns results.
 
 
 ## Building a pipeline
@@ -128,8 +166,12 @@ The underlying pieces of data that are through the pipeline via the `rawData` an
 
 ```python
 pipeline.performAcquire('./somefile.srt', 'readfile')
+>>> Acquiring to data 'readfile' using Acquirer 'readfile'
 pipeline.buildCorpus('srtchunk', 'srtchunk', 'readfile')
+>>> Building corpus 'srtchunk' from rawData 'readfile' using miner 'srtchunk'
+
 pipeline.performSearch('srtchunk', 'risearch', ['term1', 'term2'])
+>>> Performing search on corpus 'srtchunk' with engine 'risearch', terms '['term1', 'term2']'
 ```
 
 ### Example 2
@@ -139,7 +181,7 @@ pipeline.performSearch('srtchunk', 'risearch', ['term1', 'term2'])
  An `SRTTrieMiner` tagged as 'triemine' expects to receive a dictionary mapping words to the chunks that contain those words, and builds a searchable trie from such a dictionary.
  A `TrieSearch` tagged as 'triesearch' expects to receive a trie mapping word stems to chunks containing those words, and produces search results.
 
-* `YoutubeAudioDownloader.acquire('https://www.youtube.com/watch?v=JIGUHqV-aH8')` __->__ `rawData['ytaudio'], ./tmp/file1.mp3 ./tmp/file2.mp3 ...` 
+* `YoutubeAudioDownloader.acquire('https://www.youtube.com/watch?v=SOMEID')` __->__ `rawData['ytaudio'], ./tmp/file1.mp3 ./tmp/file2.mp3 ...` 
 * `rawData['ytaudio']`__:__ `['file1.mp3', 'file2.mp3', 'file3.mp3' ...]`
 * `rawData['ytaudio']` __->__ `VoiceSRTChunkMiner.build(rawData['ytaudio']), ./tmp/file1.mp3 ./tmp/file2.mp3 ...` __->__ `corpus['srtchunk']`
 * `corpus['srtchunk']`__:__ `{'word1': [somechunk, somechunk, somechunk], 'word2': [somechunk, somechunk, somechunk]}`
@@ -147,8 +189,95 @@ pipeline.performSearch('srtchunk', 'risearch', ['term1', 'term2'])
 * `corpus['triesearch']` __->__ `TrieSearch(corpus['triesearch'], ['term1', 'term2'])` __->__ `[result1, result2, result3]`
 
 ```python
-pipeline.performAcquire('https://www.youtube.com/watch?v=JIGUHqV-aH8', 'ytaudio')
+pipeline.performAcquire( 'ytaudio', 'https://www.youtube.com/watch?v=SOMEID')
+>>> Acquiring to data 'ytaudio' using Acquirer 'ytaudio'
 pipeline.buildCorpus('voicerec', 'srtchunk', 'ytaudio')
+>>> Building corpus 'srtchunk' from rawData 'ytaudio' using miner 'voicerec'
 pipeline.reprocess('triemine', 'srtchunk', 'triesearch')
+>>> Reprocessing corpus 'srtchunk' to corpus 'triesearch' using miner 'triemine'
+
 pipeline.performSearch('triesearch', 'triesearch', ['term1', 'term2'])
+>>> Performing search on corpus 'trieminer' with engine 'triesearch', terms '['term1', 'term2']'
+```
+
+
+## Timelines
+
+The `Timeline` provides a succint way of specifying functionality as one bundled end-to-end process.  It allows for the specification of a given timeline's user-friendly name, the timeline's `Acquirer` and `SearchEngine`, and any `DataMiner`s that are involved in producing searchable output.  The `Pipeline.generateTimeline()` method handles producing a corpus using a `Timeline` specification.
+
+In this format, the timeline specified in [example 2](#markdown-header-example-2) might be written thus:
+
+```python
+ytAudioRec = Timeline(
+  "Youtube Audio Speech Recognition", # user-friendly name
+  'ytaudio',                          # acquirerTag
+  ['voicerec', 'triemine'],           # minerTags to apply, in order
+  ['srtchunk', 'triesearch'],         # intermediary corpusTags to use, in order
+  'triesearch'                        # searchTag to use
+)
+
+pipeline.generateTimeline(ytAudioRec, 'https://www.youtube.com/watch?v=SOMEID') # generate the corpus
+>>> Acquiring to data 'ytaudio' using Acquirer 'ytaudio'
+>>> Building corpus 'srtchunk' from rawData 'ytaudio' using miner 'voicerec'
+>>> Reprocessing corpus 'srtchunk' to corpus 'triesearch' using miner 'triemine'
+>>> Done.
+
+pipeline.performSearch(ytAudioRec.search, ytAudioRec.corpus[-1], ['term1', 'term2'])
+>>> Performing search on corpus 'trieminer' with engine 'triesearch', terms '['term1', 'term2']'
+```
+
+TODO: Implement status-aware calls in Pipeline's methods.
+
+More than one `Timeline` can use the same intermediate corpuses.  If for instance the above timeline had been generated and a secondary timeline wanted to use the downloaded `ytaudio` source data in its own data mining:
+
+```python
+ytAudioVol = Timeline(
+  "Youtube Volume Grapher",
+  'ytaudio',
+  'volumereader',
+  'volumereader',
+  'volumesearch'
+)
+
+pipeline.generateTimeline(ytAudioVol, 'https://www.youtube.com/watch?v=SOMEID') # generate the corpus
+>>> rawData for 'ytaudio' already exists; skipping acquire
+>>> Building corpus 'volumereader' from rawData 'ytaudio' using miner 'volumereader'
+>>> Done.
+
+pipeline.performSearch(ytAudioVol.search, ytAudioRec.corpus[-1], ['term1', 'term2'])
+>>> Performing search on corpus 'volumereader' with engine 'volumesearch', terms '['term1', 'term2']'
+```
+
+If the desired data was in the process of being acquired but had not completed:
+
+```python
+pipeline.generateTimeline(ytAudioVol, 'https://www.youtube.com/watch?v=SOMEID') # generate the corpus
+>>> Acquire for 'ytaudio' already in progress; waiting...
+>>> Waiting...
+...
+>>> Building corpus 'volumereader' from rawData 'ytaudio' using miner 'volumereader'
+>>> Done.
+```
+
+`Pipeline.generateTimeline()` can be called either synchronously or asynchronously by the application:
+
+```python
+from threading import Thread
+
+pl = Pipeline()
+# pipeline setup goes here...
+
+tl = Timeline()
+# timeline setup goes here...
+
+# These calls are equivalent, except that the former blocks and the latter does not
+
+pl.generateTimeline(tl, acquireArgs)
+# ready
+
+t = Thread(target=pl.generateTimeline, args=(tl, acquireArgs))
+t.start()
+while tl.status != 0:
+  sleep(0.5)
+# ready
 ```
