@@ -1,5 +1,7 @@
 from pipeline import DataMiner, SearchEngine, Acquirer, OUT_OF_DATE, WAIT, READY, ERROR
 from time import sleep
+import re
+
 
 class SplitDataMiner(DataMiner):
 	""" Example DataMiner that splits raw input data at occurences
@@ -72,44 +74,64 @@ class PassThroughAcquirer(Acquirer):
 
 		return workingCopy
 
-import youtube_dl
+import youtube_dl, os
 
-class YoutubeSRTAcquirer(Acquirer):
+class YoutubeAutoVSSAcquirer(Acquirer):
 	def __init__(self, tempDir='./tmp/'):
 		Acquirer.__init__(self, tempDir)
-		self.ydl_opts = {
+		self.setOptions({
 			'writeautomaticsub': True,
-    		'outtmpl': unicode('./tmp/%(id)s.%(ext)s'),
+    		'outtmpl': unicode(self.tempDir + '%(id)s.%(ext)s'),
     		'skip_download': True,
-    		'quiet': True,
-		}
-<<<<<<< HEAD
-=======
-		self.tempdir = tempdir
-		self.subfilename = ''
-
-	def filenameCatcher(self, event):
-		if event['status'] == 'finished':
-			self.subfilename = event['filename']
-			print "File downloaded to", self.tempdir + self.subfilename
->>>>>>> 06696276f5f016206567231e9bf580b422f6cf4f
+			'quiet': True
+		})
 
 	def setOptions(self, opts):
 		self.ydl_opts = opts
-		self.ydl_opts['progress_hooks']=[self.filenameCatcher]
+
+	def acquire(self, *url):
+		self.subfilename = self.tempDir + url[0].split("=")[1] + '.en.vtt'
+    
+		with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
+			ydl.download(url)
+
+		if not os.path.isfile(self.subfilename):
+			print self.subfilename, "does not exist."
+			return '', ERROR
+
+		return self.subfilename, READY
+
+class YoutubeMediaAcquirer(Acquirer):
+	def __init__(self, tempDir='./tmp/'):
+		Acquirer.__init__(self, tempDir)
+		self.setOptions({
+			'writeautomaticsub': True,
+    		'outtmpl': unicode(self.tempDir + '%(id)s.%(ext)s'),
+    		'skip_download': False,
+			'quiet': False
+		})
+
+	def filenameCatcher(self, event):
+		print "Catcher triggered:", event
+		if event['status'] == 'finished':
+			self.subfilename = event['filename']
+
+	def setOptions(self, opts):
+		opts['progress_hooks']=[self.filenameCatcher]
+		self.ydl_opts = opts
+		
 
 	def acquire(self, *url):
 		self.subfilename = ''
     
 		with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
-			result = ydl.download(url)
-<<<<<<< HEAD
-			
-		subfilename = self.tempDir + url[0].split("=")[1] + '.en.vtt'
-		return subfilename
-=======
-		return self.subfilename
->>>>>>> 06696276f5f016206567231e9bf580b422f6cf4f
+			ydl.download(url)
+
+		if self.subfilename == '':
+			print "ERROR"
+			return self.subfilename, ERROR
+
+		return self.subfilename, READY
 
 class FileToLineMiner(DataMiner):
 	def build(self, data):
