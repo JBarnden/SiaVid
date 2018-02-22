@@ -44,6 +44,12 @@ class ReadFileAcquirer(Acquirer):
 
 		return lines
 
+class AlwaysFailAcquirer(Acquirer):
+	""" Example acquirer that always fails. """
+
+	def acquire(self, args):
+		return None, ERROR
+
 ###################################################################################
 
 class PassThroughAcquirer(Acquirer):
