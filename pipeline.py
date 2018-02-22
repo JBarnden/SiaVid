@@ -8,6 +8,7 @@ handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter('[%(threadName)s] %(message)s'))
 logger.addHandler(handler)
 
+statuses = ['READY','WAIT','ERROR','OUT_OF_DATE']
 READY = 0
 WAIT = 1
 ERROR = 2
@@ -18,6 +19,9 @@ class Timeline:
 		searching a timeline
 	"""
 
+	def getStatus(self):
+		return self.status
+
 	def __init__(self, prettyName="", acquirer=None, miner=None, corpus=None, search=None):
 		self.prettyName = prettyName
 		self.acquirer = acquirer
@@ -25,6 +29,7 @@ class Timeline:
 		self.corpus = corpus
 		self.search = search
 		self.status = OUT_OF_DATE
+		self.successfulAcquirer=None
 		
 class Acquirer:
 	""" Basic definition for data acquisition class """
@@ -93,8 +98,11 @@ class Acquirer:
 		return rawData, READY
 
 	def checkStatus(self):
+		""" Returns plugin status """
 		return self.status
+
 	def setStatus(self, status):
+		""" Sets plugin status """
 		self.status = status
 
 class SearchEngine:
@@ -181,8 +189,11 @@ class DataMiner:
 		return corpus, READY
 
 	def checkStatus(self):
+		""" Returns plugin status """
 		return self.status
+
 	def setStatus(self, status):
+		""" Sets plugin status """
 		self.status = status
 
 class Pipeline:
@@ -383,26 +394,37 @@ class Pipeline:
 		# result will hold ERROR only if this timeline triggered the error
 		result = None
 
-		# perform our acquire
-		result = self.performAcquire(timeline.acquirer, *acquireArgs)
+		# Ensure we always have a list of Acquirers
+		if type(timeline.acquirer) != list:
+			timeline.acquirer = [timeline.acquirer]
 
-		# Did acquisition complete successfully?
-		if self.getAcquireStatus(timeline.acquirer) == ERROR:
-			logger.error("Error in acquirer {}.".format(timeline.acquirer))
+		acquireIndex = 0 # stores the index of the successful acquirer, if any
+
+		# attempt each acquire in sequence and attempt to acquire using it
+		for ac in timeline.acquirer:
+			self.performAcquire(ac, *acquireArgs)
+
+			if self.getAcquireStatus(ac) == READY:
+				timeline.succesfulAcquirer = acquireIndex
+				break # stop at first instance of successful acquire
+			
+			acquireIndex += 1
+		else: # Log error state and do not proceed
 			timeline.status = ERROR
-			return 
+			logger.error("No successful acquisition among acquirers {}".format(timeline.acquirer))
+			return
 
 		# Ensure we always have a list of DataMiners
 		if type(timeline.miner) != list:
 			timeline.miner = [timeline.miner]
 
 		# perform initial mine
-		result = self.buildCorpus(timeline.miner[0], timeline.corpus[0], timeline.acquirer)
+		result = self.buildCorpus(timeline.miner[0], timeline.corpus[0], timeline.acquirer[acquireIndex])
 
 		# Did the prior mine complete successfully?
 		if self.getMinerStatus(timeline.miner[0]) == ERROR:
-			logger.error("Error in miner {}.".format(timeline.miner[0]))
 			timeline.status = ERROR
+			logger.error("Error in miner {}.".format(timeline.miner[0]))
 			return
 
 		# process remaining miner steps, if any
@@ -417,4 +439,4 @@ class Pipeline:
 				return
 
 		logger.info("{} done.".format(timeline.prettyName))
-		timeline.status = result
+		timeline.status = READY
