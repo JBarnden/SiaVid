@@ -1,5 +1,5 @@
 from pipeline import DataMiner, Acquirer, Pipeline
-from SpeechRecognition.SpeechRecognition import SpeechRecognitionAdapter
+from SpeechRecognition.SpeechRecognition import SpeechRecognitionWrapper
 from shutil import copyfile, rmtree
 import datetime
 import wave
@@ -9,6 +9,11 @@ import os
 # Application class just stores a pipeline object and makes sure
 # the tmp directory exists.
 class Application(object):
+    """
+        This just stores a pipeline object and makes sure
+        the given temporary directory exists.  (only used for
+        testing the speech recognition miner independently)
+    """
     def __init__(self, tmpDir):
         # Check if temp directory exists, if not create it.
         if not os.path.exists(tmpDir):
@@ -20,12 +25,6 @@ class Application(object):
         self.pl = Pipeline()
 
     def acquireAndBuildCorpus(self, acquireTag, minerTag, corpusTag, *acquireArgs):
-        # Append filename to set tmpDir path (this assumes the first arg to an acquirer
-        # will be a path), this feels a bit 'hackie'.
-        args = list(acquireArgs)
-        args[0] = self.tmpDir + acquireArgs[0]
-        # Convert args back to tuple
-        acquireArgs = tuple(args)
         # Call the pipeline function
         self.pl.acquireAndBuildCorpus(acquireTag, minerTag, corpusTag, *acquireArgs)
 
@@ -46,7 +45,14 @@ class Application(object):
 
 # Get duration of a wav file in seconds (used by miners).
 def getAudioDuration(path):
-    # Check duration of the audio in this file
+    """
+        Returns the duration of the audio file at path in seconds.
+        This function is used by the AudioSplitter and SpeechRecognition
+        miners.
+
+    :param path: path to a wav file.
+    :return: length of the wav file in seconds.
+    """
     with contextlib.closing(wave.open(path, 'r')) as audio:
         frames = audio.getnframes()
         rate = audio.getframerate()
@@ -56,27 +62,42 @@ def getAudioDuration(path):
 
 class AudioSplitter(DataMiner):
 
-    def __init__(self, offsetS):
+    def __init__(self, chunkSize, offset=0, tempDir="./tmp/"):
         """
-        Takes an input wav file and outputs several wav files based on given offset.
+        Takes an input wav file and outputs several wav files of "chunkSize" second length.
+        An offset can also be given, which creates an overlap across clips to prevent speech in
+        audio being missed/split in half.
 
-        :param offsetS: offset in seconds
+        :param chunkSize: preferred size of audio chunks in seconds.
+        :param offset: subtracts "offset" seconds.
         """
-        DataMiner.__init__(self)
+        DataMiner.__init__(self, tempDir)
 
-        if not isinstance(offsetS, int):
-            raise TypeError(offsetS, "wavToChunks: expected 'int' for offset.")
+        if not isinstance(chunkSize, int):
+            raise TypeError(chunkSize, "wavToChunks: expected 'int' for offset.")
 
-        # Offset in miliseconds
-        self.offsetMS = offsetS*1000
+        # chunk size and offset converted to milliseconds
+        self.chunkSizeMS = chunkSize*1000
+        self.offsetMS = offset*1000
 
-    def build(self, path):
+    def build(self, fname):
+        """
+        Splits the audio in the given file based on the chunk size and offset given at instantiation,
+        and saves each chunk as an audio file in the temporary directory.
+
+        :param fname: Name of the audio file to be split (inside the given temp directory).
+        :return: a list of file names of the resulting audio files.
+        """
+
+        # Prepend temporary directory to file name
+        path = self.tempDir + fname
+
         # Check that path is valid
         if not os.path.isfile(path):
             raise IOError(path, "SR Acquirer: Invalid path given.")
 
-        # Separate path from file extension
-        fName, fExt = os.path.splitext(path)
+        # Separate path and file extension
+        fpath, fExt = os.path.splitext(path)
 
         # Get duration of audio file in microseconds
         duration = getAudioDuration(path)*1000
@@ -88,9 +109,16 @@ class AudioSplitter(DataMiner):
 
         audioRemaining = True
         while audioRemaining:
-            # Set start and end times for slice
-            startMS = endMS
-            endMS = startMS + self.offsetMS
+            # Set start and end times for chunk
+            if chunkNo != 0:
+                # If we're not on the first chunk, set start time to
+                # previous end time minus the offset.
+                startMS = endMS - self.offsetMS
+            # Start time is 0 for the first chunk (start of the file)
+            else: startMS = 0
+
+            # Set end time of the chunk to the previous end time + chunk size.
+            endMS = endMS + self.chunkSizeMS
 
             if endMS > duration:
                 # Prevent from reading more data than actually exists
@@ -102,13 +130,16 @@ class AudioSplitter(DataMiner):
                 audioRemaining = False
 
             # Append chunkNo to end of file name
-            outfile = fName + str(chunkNo) + '_' + fExt
+            outfile = fpath + '_' + str(chunkNo) + fExt
 
             # Write slice to numbered outfile
             self.slice(path, outfile, startMS, endMS)
 
+            # Get file name of new file for list of file names to return
+            newFileName = fname.split(".")[0] + '_' + str(chunkNo) + fExt
+
             # Append path to outfile
-            paths.append(outfile)
+            paths.append(newFileName)
             # Increment chunk number
             chunkNo+=1
 
@@ -116,14 +147,13 @@ class AudioSplitter(DataMiner):
 
     def slice(self, path, outfile, startMS, endMS):
         """
-            Takes a slice from infile, from startMS to endMS.
-            Write slice to outfile
+        Takes a slice from the audio file at path, from startMS to endMS and
+        writes the slice to the file at "outfile" (or creates the file if it doesn't exist).
 
-        :param infile: file to take a slice from.
-        :param outfile: where the slice will be saved.
+        :param path: path of the file to take a slice from.
+        :param outfile: path where the slice will be saved.
         :param startMS: where to the slice starts in microseconds.
         :param endMS: where the slice ends in microseconds.
-        :return:
         """
         # Create outfile if it doesn't exist
         if not os.path.isfile(outfile):
@@ -154,45 +184,65 @@ class AudioSplitter(DataMiner):
 
 class SpeechRecogMiner(DataMiner):
 
-    def __init__(self, language, **kwargs):
+    def __init__(self, language, offset=0, settings=None, tempDir="./tmp/"):
         """
+        A speech recognition Data Miner class, making the Speech Recognition Wrapper functionality
+        compatible with the pipeline plugin interface.
 
-        :param language:
-        :param offset: datetime.time object specifying offset for each chunk
-        :param kwargs:
+        :param language: The RFC5646 language tag corresponding to the recognition language to be used by the engine
+        (default: en-US)
+        :param offset: The offset in seconds, applied to the audio splitter.
+        :param settings: a dictionary of any additional settings supported by the Speech Recognition Adapter
+        (see Speech Recognition Adapter documentation)
         """
-        DataMiner.__init__(self)
-        self.SRA = SpeechRecognitionAdapter()
+        DataMiner.__init__(self, tempDir)
+        self.SRA = SpeechRecognitionWrapper()
 
         # Language code that determines the dataset to be used by
         # the Recognizer (currently only en-US supported).
         # Exception handling for incompatible language is handled in SRA.
         self.language = language
         # Kwargs are passed to the speech_to_text function (See SpeechRecognition/Readme.md)
-        self.config = kwargs
+        self.config = settings
+
+        # Offset applied in the audio splitter
+        self.offsetS = offset
 
 
-    def build(self, data):
+    def build(self, fnames):
         """
+        Passes audio from the file(s) in "data" to the Speech Recognition engine, and returns one or more timestamped
+        hypotheses as SRTChunk objects.
 
-        :param data: a single path, or list of paths to audio files.
-        :return: a list of srt chunks.
+        :param fnames: a single file name, or list of file names of audio files to be transcribed within the given
+        temporary directory.
+        :return: a list of srt objects.
         """
-        if not isinstance(data, list):
-            data = [data]
+        if not isinstance(fnames, list):
+            data = [fnames]
 
         chunks = []
         et = datetime.timedelta(seconds=0)
+        # Offset in miliseconds
+        #offsetS = self.offsetS*1000
 
-        for path in data:
-            if not isinstance(path, basestring):
-                raise TypeError(data, "SpeechRecogMiner: 'data' must be string or list of strings.")
+        for fname in fnames:
+            if not isinstance(fname, basestring):
+                raise TypeError(fname, "SpeechRecogMiner: 'fnames' must be string or list of strings.")
+
+            # Prepend temporary directory to the file name
+            path = self.tempDir + fname
 
             # Get duration of this clip
             duration = getAudioDuration(path)
 
-            # Set start time to previous end time
-            st = et
+
+            # Set start time to previous end time at first pass
+            if et == datetime.timedelta(seconds=0):
+                st = et
+            # Apply offset to start time timestamp for subsequent passes.
+            else: st = et - datetime.timedelta(seconds=self.offsetS)
+
             # Set end time to start time + duration
             et = st + datetime.timedelta(seconds=duration)
 
@@ -205,46 +255,40 @@ class SpeechRecogMiner(DataMiner):
 
     def populate_SRT_chunk(self, pathToAudio, startTime, endTime):
         """
+        Passes the audio at "pathToAudio" to the speech recognition engine and returns a hypothesis in an SRTChunk
+        object. To be called indirectly via the build function.
 
-        :param pathToAudio: self explanatory
+        :param pathToAudio: path to the audio file
         :param startTime: start time of this chunk
         :param endTime: end time of this chunk
-        :return:
+        :return: An SRTChunk object containing a timestamped hypothesis.
         """
         from chunker import SRTChunk
 
         # Get hypothesis from Recognizer
-        hypothesis = self.SRA.speech_to_text(pathToAudio, self.language, **self.config)
+        if self.config is not None:
+            if not isinstance(self.config, dict): raise IOError(self.config, "SR settings must be dict!")
+            hypothesis = self.SRA.speech_to_text(pathToAudio, self.language, **self.config)
+        else:
+            hypothesis = self.SRA.speech_to_text(pathToAudio, self.language)
 
         # Populate and return an SRTChunk object
         chunk = SRTChunk()
         chunk.content = hypothesis
         chunk.startTime = startTime.seconds
         chunk.endTime = endTime.seconds
+
         return chunk
 
-class StringRepeater(Acquirer):
-    """
-        Always returns the path it was
-        given at instantiation.
-    """
-    def __init__(self, path):
-        self.path = path
-
-    def performAcquire(self, *args):
-        return self.path
-
-"""
-    This class combines the functionality of the audio splitter
-    and the Speech Recognition Miner in to a single DataMiner object.
-
-    This is the Miner that should be used with the YoutubeDL audio acquirer.
-"""
 class AudioSplitSpeechRecog(DataMiner):
-    def __init__(self, offsetS, languageTag):
-        DataMiner.__init__(self)
-        self.splitter = AudioSplitter(offsetS)
-        self.SRMiner = SpeechRecogMiner(languageTag)
+    """
+        A composite data miner, combining the functionality of the audio splitter and speech recognition miners.
+    """
+    def __init__(self, chunkSize, offset, languageTag, settings=None, tempDir=None):
+        DataMiner.__init__(self, tempDir)
+
+        self.splitter = AudioSplitter(chunkSize, offset, tempDir)
+        self.SRMiner = SpeechRecogMiner(languageTag, offset, settings, tempDir)
 
     def build(self, audioPath):
         # Split audio in to multiple chunks based on offset.
@@ -255,14 +299,24 @@ class AudioSplitSpeechRecog(DataMiner):
 
         return srtChunks
 
-"""
-    Function used for test output
-"""
+class StringRepeater(Acquirer):
+    """
+        Always returns the string it was
+        given at instantiation when performAcquire is called. (for testing purposes)
+    """
+    def __init__(self, fname, tempDir="./tmp/"):
+        Acquirer.__init__(self, tempDir)
+        self.fname = fname
+
+    def performAcquire(self, *args):
+        return self.fname
+
 def pretty_srt_chunk(SRTChunk):
     """
-        returns a formatted, printable string from it's content.
+    Returns a formatted, printable string from it's content.
+    This is used for standalone Speech Recognition testing.
 
-    :return: pretty SRT chunk string
+    :return: pretty SRTChunk string
     """
     st = datetime.timedelta(seconds=SRTChunk.startTime)
     et = datetime.timedelta(seconds=SRTChunk.endTime)
@@ -270,13 +324,15 @@ def pretty_srt_chunk(SRTChunk):
     return ''.join([st.__str__(), ' --> ', et.__str__(), "  ", SRTChunk.content])
 
 if __name__ == '__main__':
+    # Set up temporary directory for testing
+    tmp = '/media/sf_VM_Share/tmp/'
 
     """
-        This test assumes that all data we're working with will be stored in the application
-        temporary directory, so we need only specify file names.
+        Test 1: test speech recognition on a pre-downloaded file from test data folder.
     """
+
     # Create application with ref to temporary files dir & configure pipeline
-    app = Application('/media/sf_VM_Share/tmp/')
+    app = Application(tmp)
 
     audioFile = "How-boredom-can-lead-to-your-most-brilliant-ideas-Manoush-Zomorodi.wav"
 
@@ -286,33 +342,68 @@ if __name__ == '__main__':
              app.tmpDir + audioFile)
 
     # Set up a string repeater acquirer with a path to the audio file (which just repeats a given string)
-    app.pl.addAcquirer(StringRepeater(app.tmpDir + audioFile), 'repeater')
+    app.pl.addAcquirer(StringRepeater(audioFile, tmp), 'repeater')
 
     # Add a SRMiner
-    app.pl.addMiner(AudioSplitSpeechRecog(offsetS=3,languageTag='en-US'), 'SRMiner')
+    app.pl.addMiner(AudioSplitSpeechRecog(chunkSize=3, offset=1,languageTag='en-US', tempDir=tmp), 'SRMiner')
 
+    # Check pipeline contents
     app.pl.reportStatus()
 
-    """
-        Build a corpus of SRT chunks with the SR Miner
-    """
-    # Build a corpus of SRT chunks with using the audio acquirer and SRMiner
-    print "Building a corpus of SRT chunks with the SR Miner and Acquirer"
-    #app.acquireAndBuildCorpus('audioSplitter', 'SRMiner', 'SRCorpus', audioFile)
-    app.pl.acquireAndBuildCorpus('repeater', 'SRMiner', 'SRCorpus')
+    import time
 
+   # Build a corpus of SRTChunk objects with the speech recognition miner, measuring execution time.
+    start = time.time()
+    app.acquireAndBuildCorpus('repeater', 'SRMiner', 'SRCorpus', audioFile)
+    end = time.time()
+
+    # Calculate execution time
+    execTime = end - start
+
+    # Performance report
+    print "Built corpus from " + str(getAudioDuration(tmp+audioFile)/60) + " minute audio file in " \
+          + str(execTime/60) + " minutes."
+
+    # Pipeline status report
     app.pl.reportStatus()
 
-    # Clean temp dir contents (without deleting the dir)
-    app.clean()
-
+    # Display corpus entries in console
     print "Corpus Entries:"
-    # Check the corpus directly
     SRTChunks = app.pl.corpus['SRCorpus']
+    #SRTChunks = corpus
 
     # Print all chunks
     for c in SRTChunks:
         print pretty_srt_chunk(c)
+
+    # Clean temp dir contents (without deleting the dir)
+    app.clean()
+
+    """
+        Test 2: Perform speech recognition on given video URL.
+    """
+
+    # # Query user for video url
+    url = raw_input('Video url for Speech Recognition:\n')
+
+    # Set up YDL Acquirer, configured to download wav files.
+    # yldOptsDict = {'format': 'bestaudio/best',
+    #      'forcejson':'false',
+    #      'writeautomaticsub':'false',
+    #      'writesubtitles':'false',
+    #      'writeinfojson':'false',
+    #      'writedescription':'false',
+    #      'rejecttitle':'true',
+    #      'outtmpl': unicode(''.join([app.tmpDir, '%(id)s.%(ext)s'])),
+    #
+    #   'postprocessors': [{
+    #      'key': 'FFmpegExtractAudio',
+    #      'preferredcodec': 'wav',
+    #      'preferredquality': '192',
+    #
+    #    }],
+    #   'logger': YDLSettings.MyLogger(),
+    #     }
 
 
 
