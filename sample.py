@@ -1,16 +1,14 @@
 import json, sys
-from os import getcwd
+import os
 from threading import Thread
 from time import sleep
 
 from flask import Flask, request, make_response, redirect
 
-from pipeline import Pipeline, Timeline, statuses
+from pipeline import Pipeline, Timeline, statuses, READY, WAIT, OUT_OF_DATE, ERROR
 from exampleplugins import VSSChunkMiner, TrieMiner, TrieSearch, ReadFileAcquirer, AlwaysFailAcquirer, YoutubeAutoVSSAcquirer, FileToLineMiner
 
-app = Flask(__name__, static_url_path='', static_folder=getcwd() + '/Frontend-Web')
-
-# TODO: Some kind of binding of 'url' setting to source IP. Or passing during search possibly?
+app = Flask(__name__, static_url_path='', static_folder=os.getcwd() + '/Frontend-Web')
 
 pl = Pipeline()
 timelines = {}
@@ -25,11 +23,22 @@ def root():
 
 @app.route("/setURL", methods=['POST'])
 def setURL():
+    """ Saves current data, updates the internal video URL and clears
+        stored data
+    """
+
     global url
+
+    id = url.split("=")[1] # get youtube ID.
+
+    for timeline in timelines:
+        print "Saving timeline {}".format(timeline)
+        pl.saveCorpus(timelines[timeline].corpus[-1], id)
+
     url = request.form['uri']
     url = url.encode("ascii")
 
-    # TODO: Add saving/removing of existing data and loading of any archived data
+    pl.clearMemory()
 
     resp = make_response(json.dumps("URL updated"))
     resp.headers['Access-Control-Allow-Origin'] = '*'
@@ -37,6 +46,9 @@ def setURL():
 
 @app.route("/getTimelines/")
 def getSearch():
+    """ Returns a list of available timelines and their prettynames
+    """
+
     result = {}
 
     for name in timelines:
@@ -48,6 +60,9 @@ def getSearch():
 
 @app.route("/status/<timeline>")
 def checkReady(timeline):
+    """ Returns a given timeline's status
+    """
+
     status = None # default sentinel value
     
     if timeline in timelines:
@@ -61,19 +76,14 @@ def checkReady(timeline):
 
 @app.route("/search/<timeline>", methods=['POST'])
 def doSearch(timeline):
+    """ Performs a search on a given timeline
+    """
 
-    convertedResults = None
+    convertedResults = None # Sentinel value
 
     if timeline in timelines:
 
-        # get the name of the last miner on the timeline
-        miner = timelines[timeline].miner
-        if type(miner) == list:
-            miner = miner[-1]
-        
-        # pull its status
-        status = pl.mine[miner].checkStatus()
-        if status == 0:
+        if timelines[timeline].status == READY:
 
             search = timelines[timeline].search
             corpus = timelines[timeline].corpus[-1]
@@ -85,7 +95,9 @@ def doSearch(timeline):
             results = pl.performSearch(corpus, search, terms)
 
             # Convert to serialisable format...
-            convertedResults = []
+            if len(results) > 0:
+                convertedResults = []
+
             for result in results:
                 curr = {}
                 curr['start'] = result.startTime
@@ -104,16 +116,39 @@ def doAcquire(timeline):
 
     if timeline in timelines:
         global url
+        id = url.split("=")[1]
+
         result = timeline
 
-        t = Thread(target=pl.generateTimeline, name = timeline, args=(timelines[timeline], url))
-        t.start()
+        if pl.loadCorpus(timelines[timeline].corpus[-1], id):
+            print "Timeline is ready."
+            timelines[timeline].status = READY
+        else:
+            regenerate(timeline)
 
     resp = make_response(json.dumps(result))
     resp.headers['Access-Control-Allow-Origin'] = '*'
     return resp
 
-# Initial setup stuff...
+@app.route("/regen/<timeline>", methods=['GET'])
+def regen(timeline):
+    result = None
+
+    if timeline in timelines:
+        result = timeline
+        regenerate(timeline)
+
+    resp = make_response(json.dumps(result))
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp   
+
+def regenerate(timeline):
+    """ Forcibly regenerate a given timeline """
+
+    t = Thread(target=pl.generateTimeline, name = timeline, args=(timelines[timeline], url))
+    t.start()
+
+# Initial setup...
 
 if __name__ == "__main__":
 
@@ -135,7 +170,7 @@ if __name__ == "__main__":
     # we pre-specify the timelines we want to offer...
 
     timelines['subtitles'] = Timeline(
-        "Downloaded Subtitles",                 # prettyName
+        "Auto Subtitles",                 # prettyName
         ['fail', 'ytsub'],                                # acquireTag
         ['fileline', 'vssminer', 'trieminer'],  # minerTags in order
         ['fileline', 'vssminer', 'trieminer'],  # corpusTags in order
@@ -143,30 +178,36 @@ if __name__ == "__main__":
     )
 
     timelines['subtitles2'] = Timeline(
-        "Downloaded Subtitles 2",                 # prettyName
+        "Duplicate auto subs",                 # prettyName
+        'ytsub',                                # acquireTag
+        ['fileline', 'vssminer', 'trieminer'],  # minerTags in order
+        ['fileline', 'vssminer', 'trieminer'],  # corpusTags in order
+        'triesearch'                            # searchTag
+    )
+
+    timelines['fail'] = Timeline(
+        "This timeline always fails to acquire", # prettyName
         'fail',                                # acquireTag
         ['fileline', 'vssminer', 'trieminer2'],  # minerTags in order
         ['fileline', 'vssminer', 'trieminer2'],  # corpusTags in order
         'triesearch'                            # searchTag
     )
-    timelines['subtitles3'] = Timeline(
-        "Downloaded Subtitles 3",                 # prettyName
+    timelines['alttrieminer'] = Timeline(
+        "Secondary Trieminer",                 # prettyName
         'ytsub',                                # acquireTag
         ['fileline', 'vssminer2', 'trieminer2'],  # minerTags in order
         ['fileline', 'vssminer2', 'trieminer2'],  # corpusTags in order
         'triesearch'                            # searchTag
     )
 
-    timelines['subtitles4'] = Timeline(
-        "Downloaded Subtitles 4",                 # prettyName
-        'ytsub',                                # acquireTag
-        ['fileline', 'vssminer', 'trieminer3'],  # minerTags in order
-        ['fileline', 'vssminer', 'trieminer3'],  # corpusTags in order
-        'triesearch'                            # searchTag
-    )
-
     # t1 = Thread(target=pl.generateTimeline, name = "t1", args=(timelines['subtitles'], url))
     # t1.start()
+
+    # t1.join()
+    # id = url.split("=")[1]
+
+    # pl.saveCorpus(timelines['subtitles'].corpus[-1], id)
+
     # t2 = Thread(target=pl.generateTimeline, name = "t2", args=(timelines['subtitles2'], url))
     # t2.start()
     # sleep(5)
