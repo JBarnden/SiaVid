@@ -364,7 +364,7 @@ function addResults(results, args) {
     if (!timeline in depScrub) return;
     
     if (results == null) {
-        updateStatus('WAIT', timeline);
+        console.log("No results found.");
         return;
     }
 
