@@ -287,8 +287,6 @@ class Pipeline:
 		""" Performs an Acquire using the tagged Acquirer and stores
 			the results in rawData with the acquirer's tag """
 
-		t = current_thread().name
-
 		with self.acquire[acquireTag].lock:
 			if self.acquire[acquireTag].status != READY:
 				logger.info("Acquiring to data '{}' using Acquirer '{}'".format(acquireTag, acquireTag))
@@ -312,8 +310,6 @@ class Pipeline:
 
 	def buildCorpus(self, minerTag, corpusTag, acquireTag):
 		""" Generate a corpus from a given dataset using a given miner """
-
-		t = current_thread().name
 		
 		with self.mine[minerTag].lock:
 			if self.mine[minerTag].status != READY:
@@ -448,6 +444,29 @@ class Pipeline:
 
 		timeline.status = OUT_OF_DATE
 
+	def saneTimeline(self, timeline):
+		""" Checks a given timeline's plugins for existence and
+			ensures that its acquirer/miner lists are lists.
+		"""
+
+		if type(timeline.acquirer) != list:
+			timeline.acquirer = [timeline.acquirer]
+		if type(timeline.miner) != list:
+			timeline.miner= [timeline.miner]
+		
+		for ac in timeline.acquirer:
+			if not self.acquire.has_key(ac):
+				return False
+
+		for mine in timeline.miner:
+			if not self.mine.has_key(mine):
+				return False
+
+		if not self.search.has_key(timeline.search):
+			return False
+
+		return True
+
 	def generateTimeline(self, timeline, *acquireArgs):
 		""" Given a timeline, takes the steps necessary to prepare that
 			timeline for search, and updates its status as necessary.
@@ -455,15 +474,18 @@ class Pipeline:
 
 		# TODO: Proper error handling.
 
+		# Ensure timeline can be generated
+
+		if not self.saneTimeline(timeline):
+			timeline.status = ERROR
+			logger.error("Timeline {} is missing plugins.".format(timeline.prettyName))
+			return
+
 		t = current_thread().name
 		timeline.status = WAIT
 
 		# result will hold ERROR only if this timeline triggered the error
 		result = None
-
-		# Ensure we always have a list of Acquirers
-		if type(timeline.acquirer) != list:
-			timeline.acquirer = [timeline.acquirer]
 
 		acquireIndex = 0 # stores the index of the successful acquirer, if any
 
@@ -480,10 +502,6 @@ class Pipeline:
 			timeline.status = ERROR
 			logger.error("No successful acquisition among acquirers {}".format(timeline.acquirer))
 			return
-
-		# Ensure we always have a list of DataMiners
-		if type(timeline.miner) != list:
-			timeline.miner = [timeline.miner]
 
 		# perform initial mine
 		result = self.buildCorpus(timeline.miner[0], timeline.corpus[0], timeline.acquirer[acquireIndex])
