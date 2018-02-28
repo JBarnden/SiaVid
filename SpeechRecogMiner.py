@@ -257,7 +257,7 @@ class SpeechRecogMiner(DataMiner):
                 print "SpeechRecogMiner: 'fnames' must be string or list of strings."
                 return chunks, ERROR
 
-            print "Processing audio chunks " + str((fnames.index(fname)/len(fnames))*100) + "% complete."
+            print "Processing audio chunks " + str((float(fnames.index(fname))/len(fnames))*100) + "% complete."
 
             # Prepend temporary directory to the file name
             path = self.tempDir + fname

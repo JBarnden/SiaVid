@@ -92,7 +92,7 @@ class SpeechRecognitionWrapper(object):
     # Currently outputs text
     def speech_to_text(self, audioFilePath, language='en-US', **kwargs):
         """
-            Takes the path of an audio file, decodes it, and attempts to 
+            Takes the path to an audio file, decodes it, and attempts to 
             recognize speech within the decoded audio using one or more SR 
             engines.
 
@@ -299,7 +299,6 @@ class SpeechRecognitionWrapper(object):
             # Display calculations in console
             print "Reference word count: " + str(len(reference))
             print "Levenshtein distance = " + str(ld)
-            print "Martin Thoma Lev Distance = " + str(wer(reference,hypothesis))
             print "Word Error Rate = " + str(ld) + " / " + str(len(reference)) + " = " + str(ld/float(len(reference)))
 
         # Return WER: LD/number of words in the reference string
@@ -356,101 +355,106 @@ class SpeechRecognitionWrapper(object):
         # Convert all text to lower case
         pass
 
-def evaluate(testCases, testDir):
-    """
-    Evaluate the transcription a series of audio files against corresponding hypotheses.
+    def evaluate(self, testCases, testDir, saveHypotheses=False):
+        """
+        Evaluate the hypotheses from a series of audio files against
+        corresponding reference transcripts.
+    
+        :param testCases: list of [filename, refTranscriptPath] lists.
+        :param testDir: path to the test data directory
+        :param saveHypotheses: if True, hypotheses are saved as
+        "SRHypothesis_CASE" where "CASE" is the file name of the given reference
+        transcript.
+        :return: result dictionary of (audio_filename, WordErrorRate) items.
+        """
+        if not isinstance(testCases, list):
+            raise TypeError(testCases, "evaluate: testCases must be list of lists.")
+    
+        import time
+        SR = SpeechRecognitionWrapper()
+    
+        results = {}
+        caseNo = 1
+        for case in testCases:
+            # Generate path for SR engine
+            path = testDir + case[0]
+            # Recognize text (get hypothesis) and note execution time
+            st = time.time()
+            print "Passing Case " + str(caseNo) + " audio to SR engine."
+            hyp = SR.speech_to_text(path)
+            end = time.time()
+            print "Case #" + str(caseNo) + " processed in " + str(end-st) + " seconds."
+    
+            if saveHypotheses:
+                # Save hypothesis in text file
+                f = open(testDir+"SRHypothesis_"+case[1], 'w+')
+                f.write(hyp)
+                f.close()
+    
+            # Get word error rate for this case using default cost settings
+            # (see WER function documentation).
+            wer = SR.word_error_rate(hyp,case[1],verbose=True)
+            # Store results for this file in result dict.
+            results[case[0]] = wer
+    
+            # Increment case number (for console output)
+            caseNo += 1
+    
+        return results
 
-    :param testCases: list of [filename, refTranscriptPath] lists.
-    :param testDir: path to the test data directory
-    :return: result dictionary of (filename, WordErrorRate) items.
-    """
-    if not isinstance(testCases, list):
-        raise TypeError(testCases, "evaluate: testCases must be list of lists.")
-
-    import time
-    SR = SpeechRecognitionWrapper()
-
-    results = {}
-    caseNo = 1
-    for case in testCases:
-        # Generate path for SR engine
-        path = testDir + case[0]
-        # Recognize text (get hypothesis) and note execution time
-        st = time.time()
-        print "Passing Case " + str(caseNo) + " audio to SR engine."
-        hyp = SR.speech_to_text(path)
-        end = time.time()
-        print "Case #" + str(caseNo) + " processed in " + str(end-st) + " seconds."
-
-        # Save hypothesis in text file
-        f = open(testDir+"SRHypothesis_"+case[1], 'w+')
-        f.write(hyp)
-        f.close()
-
-        # Get word error rate for this case using default cost settings
-        # (see WER function documentation).
-        wer = SR.word_error_rate(hyp,case[1],verbose=True)
-        # Store results for this file in result dict.
-        results[case[0]] = wer
-
-        # Increment case number (for console output)
-        caseNo += 1
-
-    return results
-
-def buildTestCaseList(testDataDir):
-    """
-    Builds a test case list compatible with the evaluate function.  The given
-    test data directory is expected to contain a list of audio files (.wav) and
-    reference transcripts (.txt), where the names for corresponding audio and
-    transcript files match (e.g. my_audio.wav - my_audio.txt).
-
-    :param testDataDir: path to the test data directory.
-    :return: Test case list compatible with the "evaluate" function
-    """
-    from os import listdir
-    from os.path import isfile, join, splitext
-
-    # Get all files from test data directory
-    testFiles = [f for f in listdir(testDataDir) if isfile(join(testDataDir, f))]
-
-    # List of test cases to be populated
-    testCases = []
-    # List of files to exclude from consideration (ones that are dealt with
-    # below)
-    exclude = []
-
-    # Exclude all files that aren't txt or wav
-    for f in testFiles:
-        # Get file extention
-        fExt = splitext(f)[1]
-        if fExt != ".wav" and fExt != ".txt":
-            exclude.append(f)
-
-    for f in testFiles:
-        if f not in exclude:
-            # Separate file name and extension
-            fname, fExt = splitext(f)
-
-            for f2 in testFiles:
-                if f2 not in exclude and f != f2:
-                    # Separate path and file extension
-                    fname2, fExt2 = splitext(f2)
-
-                    # If the names of the files match
-                    if fname == fname2:
-                        # If the first file is a wav...
-                        if fExt == ".wav":
-                            # The first file is the wav file, have that as first
-                            # element in appended list.
-                            testCases.append([fname + fExt, fname2 + fExt2])
-                        else:
-                            # The second file is the wav file.
-                            testCases.append([fname2 + fExt2, fname + fExt])
-
-                        # These files are dealt with, add them to exclude list
-                        exclude.extend([f, f2])
-    return testCases
+    def buildTestCaseList(self, testDataDir):
+        """
+        Builds a test case list compatible with the evaluate function.  The given
+        test data directory is expected to contain a list of audio files (.wav) and
+        reference transcripts (.txt), where the names for corresponding audio and
+        transcript files match (e.g. my_audio.wav - my_audio.txt).
+    
+        :param testDataDir: path to the test data directory.
+        :return: Test case list compatible with the "evaluate" function
+        """
+        from os import listdir
+        from os.path import isfile, join, splitext
+    
+        # Get all files from test data directory
+        testFiles = [f for f in listdir(testDataDir) if isfile(join(testDataDir, f))]
+    
+        # List of test cases to be populated
+        testCases = []
+        # List of files to exclude from consideration (ones that are dealt with
+        # below)
+        exclude = []
+    
+        # Exclude all files that aren't txt or wav
+        for f in testFiles:
+            # Get file extention
+            fExt = splitext(f)[1]
+            if fExt != ".wav" and fExt != ".txt":
+                exclude.append(f)
+    
+        for f in testFiles:
+            if f not in exclude:
+                # Separate file name and extension
+                fname, fExt = splitext(f)
+    
+                for f2 in testFiles:
+                    if f2 not in exclude and f != f2:
+                        # Separate path and file extension
+                        fname2, fExt2 = splitext(f2)
+    
+                        # If the names of the files match
+                        if fname == fname2:
+                            # If the first file is a wav...
+                            if fExt == ".wav":
+                                # The first file is the wav file, have that as first
+                                # element in appended list.
+                                testCases.append([fname + fExt, fname2 + fExt2])
+                            else:
+                                # The second file is the wav file.
+                                testCases.append([fname2 + fExt2, fname + fExt])
+    
+                            # These files are dealt with, add them to exclude list
+                            exclude.extend([f, f2])
+        return testCases
 
 if __name__ == '__main__':
 
@@ -476,10 +480,10 @@ if __name__ == '__main__':
     print "Testing speech recognition with test data in directory '" + testDataDir + "'"
 
     # Get list of test cases from test data directory
-    testCaseList = buildTestCaseList(testDataDir)
+    testCaseList = SR.buildTestCaseList(testDataDir)
     print "found " + str(len(testCaseList)) + " test cases."
     # Evaluate SR engine (with default configuration) on test cases
-    results = evaluate(testCaseList, testDataDir)
+    results = SR.evaluate(testCaseList, testDataDir)
 
     print "Evaluation complete.\n\nResults:"
     for case, wer in results.iteritems():
