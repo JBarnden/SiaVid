@@ -1,12 +1,16 @@
-﻿from time import gmtime, strftime
-
-# Library requires installation (pip install SpeechRecognition)
+﻿"""
+	Dependencies:
+	- SpeechRecognition 3.8.1+ (pip install SpeechRecognition)
+	- PocketSphinx
+	
+"""
 import speech_recognition as sr
 import sys
+from time import gmtime, strftime
 
 class Logger(object):
     """
-        Logger can be used to direct anything sent to the output stream
+        Logger can be used to direct anything sent to the output stream (print)
         to both the console and a given log file.
     """
     def __init__(self, logFile):
@@ -30,7 +34,8 @@ class SpeechRecognitionWrapper(object):
 
     def __init__(self):
         """
-            Initializes Recognizer instance and list of supported recognition language tags.
+            Initializes Recognizer instance and list of supported recognition
+            language tags.
         """
         # Create instance of recognizer object accessible
         # to all class methods
@@ -40,7 +45,8 @@ class SpeechRecognitionWrapper(object):
         self.SL = ['en-US']
 
     def read_audio_data(self, audioFilePath, **kwargs):
-        # "values below energy threshold are considered silence, values above the threshold are considered speech"
+        # "values below energy threshold are considered silence, 
+        # values above the threshold are considered speech"
         #     - https://github.com/Uberi/speech_recognition/blob/master/reference/library-reference.rst#recognizer_instanceenergy_threshold--300
         """
         This function is used by the speech_to_text method to convert a
@@ -53,8 +59,9 @@ class SpeechRecognitionWrapper(object):
             recordDuration - how long to record for, default is None
             (read until end of stream)
 
-            energyThreshold - Values below the energy threshold are considered as silence, values above
-            considered as speech.  If energy-threshold is -1 (default), the dynamic energy threshold will be used.
+            energyThreshold - Values below the energy threshold are considered
+            as silence, values above considered as speech.  If energy-threshold
+            is -1 (default), the dynamic energy threshold will be used.
             (see https://github.com/Uberi/speech_recognition/blob/master/reference/library-reference.rst#recognizer_instanceenergy_threshold--300)
 
         :return: Audio data instance (input to SR engines)
@@ -66,11 +73,13 @@ class SpeechRecognitionWrapper(object):
         if kwargs['energyThreshold'] > -1:
             self._r.energy_threshold = kwargs['energyThreshold']
         else:
-            # recognizer will automatically adjust energy threshold based on "the currently ambient noise level while listening"
+            # recognizer will automatically adjust energy threshold based on
+            # "the currently ambient noise level while listening"
             #    - https://github.com/Uberi/speech_recognition/blob/master/reference/library-reference.rst#recognizer_instancedynamic_energy_threshold--true
             self._r.dynamic_energy_threshold = True
 
-        # Open audio file for reading, storing it as an AudioFile instance called "source".
+        # Open audio file for reading, storing it as an AudioFile instance
+        # called "source".
         try:
             with sr.AudioFile(audioFilePath) as source:
                 # "Record" audio from source, returns "AudioData" instance
@@ -83,14 +92,18 @@ class SpeechRecognitionWrapper(object):
     # Currently outputs text
     def speech_to_text(self, audioFilePath, language='en-US', **kwargs):
         """
-            Takes the path of an audio file, decodes it, and attempts to recognize speech within the decoded
-            audio using one or more SR engines.
+            Takes the path of an audio file, decodes it, and attempts to 
+            recognize speech within the decoded audio using one or more SR 
+            engines.
 
         :param audioFilePath: Path to the audio file containing speech.
-        :param language: The RFC5646 language tag corresponding to the recognition language to use. (default: en-US)
+        :param language: The RFC5646 language tag corresponding to the
+        recognition language to use. (default: en-US)
         :param kwargs:
-            energy-threshold (int) - Values below the energy threshold are considered as silence, values above
-            considered as speech.  If energy-threshold is -1 (default), the dynamic energy threshold will be used.
+            energy-threshold (int) - Values below the energy threshold are
+            considered as silence, values above considered as speech.
+            If energy-threshold is -1 (default), the dynamic energy threshold
+            will be used.
             (see https://github.com/Uberi/speech_recognition/blob/master/reference/library-reference.rst#recognizer_instanceenergy_threshold--300)
 
             Different engines can be enabled/disabled like so:
@@ -101,10 +114,12 @@ class SpeechRecognitionWrapper(object):
             Verbose output can also be toggled with:
                 - verbose=True/False (False by default)
                 If false, function just returns the best possible prediction.
-                If true, function returns a more detailed output.  E.g. for sphinx,
-                verbose output would return a pocketsphinx.Decoder object with scores and
-                confidence values for the generated hypothesis and its segments.
-        :return: One or more hypotheses (based on the number of enabled speech recognition engines)
+                If true, function returns a more detailed output.  E.g. for
+                sphinx, verbose output would return a pocketsphinx.Decoder
+                object with scores and confidence values for the generated
+                hypothesis and its segments.
+        :return: One or more hypotheses
+        (based on the number of enabled speech recognition engines)
         """
 
         kwargs.setdefault("energyThreshold", -1)
@@ -123,11 +138,13 @@ class SpeechRecognitionWrapper(object):
         if kwargs["energyThreshold"] > -1:
             recognizer.energy_threshold = kwargs["energyThreshold"]
         else:
-            # recognizer will automatically adjust energy threshold based on "the currently ambient noise level while listening"
+            # recognizer will automatically adjust energy threshold based on
+            # "the currently ambient noise level while listening"
             #    - https://github.com/Uberi/speech_recognition/blob/master/reference/library-reference.rst#recognizer_instancedynamic_energy_threshold--true
             recognizer.dynamic_energy_threshold = True
 
-        # Open audio file for reading, storing it as an AudioFile instance called "source".
+        # Open audio file for reading, storing it as an AudioFile instance
+        # called "source".
         with sr.AudioFile(audioFilePath) as source:
             # "Record" audio from source, returns "AudioData" instance
             # https://github.com/Uberi/speech_recognition/blob/master/reference/library-reference.rst#recognizer_instancerecordsource-duration--none-offset--none
@@ -137,7 +154,8 @@ class SpeechRecognitionWrapper(object):
             witAIText = None
             googleSRText = None
 
-            # Following inspired by: https://github.com/Uberi/speech_recognition/blob/master/examples/audio_transcribe.py
+            # Following inspired by:
+            # https://github.com/Uberi/speech_recognition/blob/master/examples/audio_transcribe.py
             # The rest of the API's require credentials or an API key
 
             # recognize speech using Sphinx
@@ -193,28 +211,37 @@ class SpeechRecognitionWrapper(object):
 
     def word_error_rate(self, reference, hypothesis, **kwargs):
         """
-        Calculates and returns the word error rate between given hypothesis and reference strings.  Different costs for
-        insertions, deletions and substitutions can be applied via keyword arguments.
+        Calculates and returns the word error rate between given hypothesis and
+        reference strings.  Different costs for insertions, deletions and
+        substitutions can be applied via keyword arguments.
 
-        The word error rate is the Levenshtein Distance between reference and hypothesis strings, divided by
-        the number of words in the reference string.
+        The word error rate is the Levenshtein Distance between reference and
+        hypothesis strings, divided by the number of words in the reference
+        string.
+        
         Refs:
             http://www.python-course.eu/levenshtein_distance.php
             https://martin-thoma.com/word-error-rate-calculation/
 
-        The transcript normalization process could do with refining to improve formatting consistency,
-        for example one transcript might use digits for numbers while another might have numbers as words,
-        consistent formatting could be ensured by catching text and converting it to digits or vis-versa.
+        The transcript normalization process could do with refining to improve
+        formatting consistency, for example one transcript might use digits for
+        numbers while another might have numbers as words, consistent formatting
+        could be ensured by catching text and converting it to digits or
+        vis-versa.
 
         :param hypothesis: hypothesis string (speech recognition output)
-        :param reference: reference string (reference transcript to compare with hypothesis)
+        :param reference: reference string (reference transcript to compare
+        with hypothesis)
         :param kwargs:
             insCost (int) - the cost associated with an insertion (default is 1)
             delCost (int) - the cost associated with a deletion (default is 1)
-            subCost (int) - the cost associated with a substitution (default is 1)
-            verbose (bool) - prints full calculations to console (default is False)
+            subCost (int) - the cost associated with a substitution (default is
+            1)
+            verbose (bool) - prints full calculations to console (default is
+            False)
 
-        :return: Levenshtein distance between the reference and hypothesis strings.
+        :return: Levenshtein distance between the reference and hypothesis
+        strings.
         """
         if not isinstance(hypothesis, basestring) \
             or not isinstance(reference, basestring):
@@ -280,14 +307,16 @@ class SpeechRecognitionWrapper(object):
 
     def load_subs(self, pathToSubsFile, readFrom=0):
         """
-        Read an subtitle file and return a lowercase string containing no numeric characters,
-        newline characters, or punctuation.  This can then be used as a reference transcript
-        for word error rate calculation.
+        Read an subtitle file and return a lowercase string containing no
+        numeric characters, newline characters, or punctuation. 
+        This can then be used as a reference transcript for word error rate
+        calculation.
 
         :param readFrom: the line to begin reading from
         (where 0 is the first line).
         :return: lowercase string containing no numeric values or punctuation
-        (matching format of SR output for use as a reference script in WER calculation).
+        (matching format of SR output for use as a reference script in WER
+        calculation).
         """
         import string
 
@@ -306,9 +335,12 @@ class SpeechRecognitionWrapper(object):
                 # Remove punctuation
                 subStr.translate(None, string.punctuation)
 
-                # Copy each character from subs back in to subs unless character is digit.
-                # ISSUE: some subtitle files use numeric values (e.g. when speaker says a number)
-                #   instead of spelling numbers as words, this could potentially effect the accuracy
+                # Copy each character from subs back in to subs unless character
+                # is digit.
+                # ISSUE: some subtitle files use numeric values
+                # (e.g. when speaker says a number)
+                #   instead of spelling numbers as words, this could potentially
+                # effect the accuracy
                 #    of the word error rate calculation.
                 subStr = "".join([i for i in subStr if not i.isdigit()])
 
@@ -355,7 +387,8 @@ def evaluate(testCases, testDir):
         f.write(hyp)
         f.close()
 
-        # Get word error rate for this case using default cost settings (see WER function documentation).
+        # Get word error rate for this case using default cost settings
+        # (see WER function documentation).
         wer = SR.word_error_rate(hyp,case[1],verbose=True)
         # Store results for this file in result dict.
         results[case[0]] = wer
@@ -367,8 +400,9 @@ def evaluate(testCases, testDir):
 
 def buildTestCaseList(testDataDir):
     """
-    Builds a test case list compatible with the evaluate function.  The given test data directory is expected to
-    contain a list of audio files (.wav) and reference transcripts (.txt), where the names for corresponding audio and
+    Builds a test case list compatible with the evaluate function.  The given
+    test data directory is expected to contain a list of audio files (.wav) and
+    reference transcripts (.txt), where the names for corresponding audio and
     transcript files match (e.g. my_audio.wav - my_audio.txt).
 
     :param testDataDir: path to the test data directory.
@@ -382,7 +416,8 @@ def buildTestCaseList(testDataDir):
 
     # List of test cases to be populated
     testCases = []
-    # List of files to exclude from consideration (ones that are dealt with below)
+    # List of files to exclude from consideration (ones that are dealt with
+    # below)
     exclude = []
 
     # Exclude all files that aren't txt or wav
@@ -406,7 +441,8 @@ def buildTestCaseList(testDataDir):
                     if fname == fname2:
                         # If the first file is a wav...
                         if fExt == ".wav":
-                            # The first file is the wav file, have that as first element in appended list.
+                            # The first file is the wav file, have that as first
+                            # element in appended list.
                             testCases.append([fname + fExt, fname2 + fExt2])
                         else:
                             # The second file is the wav file.
@@ -418,8 +454,8 @@ def buildTestCaseList(testDataDir):
 
 if __name__ == '__main__':
 
-    # Redirect stdout (python print) to the logger class, which sends outstream to console and
-    # to a log file at the same time.
+    # Redirect stdout (python print) to the logger class, which sends outstream
+    # to console and to a log file at the same time.
     sys.stdout = Logger("SRLog.log")
 
     print "Testing Word Error rate calculator"
