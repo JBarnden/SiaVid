@@ -54,12 +54,15 @@ def getAudioDuration(path):
     :param path: path to a wav file.
     :return: length of the wav file in seconds.
     """
-    with contextlib.closing(wave.open(path, 'r')) as audio:
-        frames = audio.getnframes()
-        rate = audio.getframerate()
-        # Get duration in seconds
-        duration = frames / float(rate)
-        return duration
+    try:
+        with contextlib.closing(wave.open(path, 'r')) as audio:
+            frames = audio.getnframes()
+            rate = audio.getframerate()
+            # Get duration in seconds
+            duration = frames / float(rate)
+            return duration
+    except Exception as e:
+        return False
 
 class AudioSplitter(DataMiner):
 
@@ -107,6 +110,9 @@ class AudioSplitter(DataMiner):
 
         # Get duration of audio file in microseconds
         duration = getAudioDuration(path)*1000
+        
+        if duration is False:
+            return None, ERROR
 
         # chunkNo is appended to the end of a file name
         chunkNo = 0
@@ -264,6 +270,9 @@ class SpeechRecogMiner(DataMiner):
 
             # Get duration of this clip
             duration = getAudioDuration(path)
+            
+            if duration == False:
+                return None, ERROR
 
             # Set start time to previous end time at first pass
             if et == datetime.timedelta(seconds=0):
@@ -310,7 +319,7 @@ class SpeechRecogMiner(DataMiner):
             
             # Populate and return an SRTChunk object
             chunk = SRTChunk()
-            chunk.content = hypothesis
+            chunk.content = [hypothesis]
             chunk.startTime = startTime.seconds
             chunk.endTime = endTime.seconds
         except Exception as e:
@@ -323,7 +332,7 @@ class AudioSplitSpeechRecog(DataMiner):
         A composite data miner, combining the functionality of the audio
         splitter and speech recognition miners.
     """
-    def __init__(self, chunkSize, offset, languageTag, settings=None, tempDir=None):
+    def __init__(self, chunkSize, offset, languageTag, settings=None, tempDir='./tmp/'):
         DataMiner.__init__(self, tempDir)
 
         self.splitter = AudioSplitter(chunkSize, offset, tempDir)
