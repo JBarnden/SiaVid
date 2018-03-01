@@ -145,6 +145,42 @@ class FileToLineMiner(DataMiner):
 import re
 from chunker import SRTChunk
 
+class SRTChunkListToRIDict(DataMiner):
+	""" Takes a list of SRTChunks and builds a reverse-indexed dict of
+		word => list of chunks containing word
+	"""
+
+	def build(self, data):
+		words = {}
+
+		for chunk in data:
+			self.tagWords(chunk, words)
+
+		return words
+
+	def tagWords(self, chunk, words):
+		""" Adds a reference to the current chunk to each word
+			in the Words dictionary """
+		usedwords = []
+
+		for word in chunk.getFullText().split(" "):
+			
+			# isolate actual word - no punctuation on either side
+			tmp = re.search("([A-Za-z']+)", word)
+
+			if tmp:
+				word = tmp.group(1)
+
+			word = word.lower()
+
+			if not word in usedwords:
+				usedwords.append(word)
+
+				if not words.has_key(word):
+					words[word] = []
+				words[word].append(chunk)
+
+
 class SRTChunkMiner(DataMiner):
 	""" Takes a filename, returns a dict of lists of chunks, indexed by word """
 
