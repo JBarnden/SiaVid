@@ -28,7 +28,7 @@ TrieSearch relies on `set`.
 
 The web backend provided in `sample.py` relies on `json`, `sys`, `os`, `threading` and `flask`.
 
-`SpeechRecognitionWrapper` in `SpeechRecognition/` rely on `SpeechRecognition 3.8.1+`, `string`, `time`, and `numpy` (see `SpeechRecognition/README.md` for more detail).
+`SpeechRecognitionWrapper` in `SpeechRecognition/` relies on `SpeechRecognition 3.8.1+`, `string`, `time`, and `numpy` (see `SpeechRecognition/README.md` for more detail).
 The Speech Recognition plugins rely on `SpeechRecognitionWrapper`, `wave` and `contextlib` for audio processing, and `os` for operations on the file system.
 
 ## Pipeline
