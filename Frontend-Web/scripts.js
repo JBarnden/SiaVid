@@ -71,16 +71,13 @@ var oldElapsed; // Check to see if video has moved when scrubbing is needed.
 
 function checkStatus() {
     // Should be called every few seconds. Queries backend for states of 
-    // data mining if they're not flagged as READY or PENDING.
+    // data mining if they're not flagged as READY, ERROR or WAIT.
 
     for (var v in depScrub) {
-        if (depScrub[v].status != "READY") {
-            if (depScrub[v].status != "PENDING") {
+            if (depScrub[v].status == "WAIT") {
                 console.log("Checking status for " + v);
                 doGet('status/' + v, updateStatus, v);
-                updateStatus("PENDING", v);
             }
-        }
     }
 }
 
@@ -96,6 +93,9 @@ function updateStatus(status, tlIndex) {
     }
     if (status == 'WAIT') {
         depScrub[tlIndex].tl.style.backgroundImage = "url('./loading.gif')";
+    }
+    if ((status == 'ERROR') || (status == null)) {
+        depScrub[tlIndex].tl.style.backgroundImage = "url('./error.gif')";
     }
     console.log("Timeline " + tlIndex + " status set to " + depScrub[tlIndex].status);
 }
@@ -125,8 +125,11 @@ function doGet(url, callback, arg=null) {
 }
 
 function doPost(url, params, callback, arg=null) {
-    // TODO
-    url = requestURL+url;
+    // Takes a url and a callback, submits an async POST to the URL and
+    // passes the results to the callback method
+    // Arg may be provided to pass extra data of any type.
+
+    url = requestURL + url;
 
     console.log("Making request: " + url);
     
@@ -135,7 +138,7 @@ function doPost(url, params, callback, arg=null) {
     xmlHttp.open("POST", url, true);
     xmlHttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
 
-    xmlHttp.onreadystatechange = function() {//Call a function when the state changes.
+    xmlHttp.onreadystatechange = function() { //Call a function when the state changes.
         if (xmlHttp.readyState == 4 && xmlHttp.status == 200) {
             var result = JSON.parse(xmlHttp.responseText);
             if (arg) callback(result, arg);
@@ -155,7 +158,7 @@ function getTimelineTypes() {
 }
 
 function setTimelineTypes(timelines) {
-    // Populate timeline selection bsaed on timelines available in backend
+    // Populate timeline selection based on timelines available in backend
 
     if (timelines == null) {
         console.log("Unable to load timelines.");
@@ -173,20 +176,33 @@ function setTimelineTypes(timelines) {
     }
 }
 
-function triggerDatamine(timeline) {
-    // notify backend that a given data mining method has been requested
+function searchTimeline(tl, params, colour = "") {
+    // Search a given timeline
 
-    // TODO
+    if (depScrub[tl].status != "READY") return;
+
+    console.log("Searching " + tl + ": " + params);
+    if (colour == "") doPost('search/' + tl, params, addResults, [tl]);
+    else doPost('search/' + tl, params, addResults, [tl, colour])
 }
 
-function executeSearch(terms) {
+function searchOne(tl, clear=true) {
+    // Handler for single-timeline searches
+    var params = 'searchterms=' + document.getElementById('searchterms').value;
+
+    if (clear) clearResults(tl);
+    searchTimeline(tl, params, "#4455DD");
+}
+
+function searchAll(clear=true) {
+    // Handler for searching all timelines
     var params = 'searchterms=' + document.getElementById('searchterms').value;
 
     for (tl in depScrub) {
         if (depScrub[tl].status != "READY") continue;
-        console.log("Searching " + tl + ": " + params);
-        clearResults(tl);
-        doPost('search/' + tl, params, addResults, tl);
+
+        if (clear) clearResults(tl);
+        searchTimeline(tl, params);
     }
 }
 
@@ -262,8 +278,6 @@ function addNewTimeline() {
         (timelineValue == "default")
     ) return;
 
-    // trigger backend data processing
-
     var timelineName = "";
 
     dropDown.childNodes.forEach( // Disable a given timeline option once added.
@@ -283,6 +297,9 @@ function addNewTimeline() {
 
     // Add link with call to removeTimeline()
     frame.innerHTML = timelineName + 
+        " [<a class='title' href='javascript: searchOne(\"" + timelineValue + "\", false)'>Add results to this timeline</a>]" +
+        " [<a class='title' href='javascript: clearResults(\"" + timelineValue + "\")'>Clear results from this timeline</a>]" +
+        " [<a class='title' href='javascript: regenTimeline(\"" + timelineValue + "\")'>Re-generate this timeline</a>]" +
         " [<a class='title' href='javascript: removeTimeline(\"" + timelineValue + "\")'>Remove this timeline</a>]";
 
     frame.setAttribute('class', 'timelineFrame');
@@ -296,6 +313,8 @@ function addNewTimeline() {
 
     // Store handles to the new scrubber
     registerDepScrubber(scrubber, newTimeline, timelineValue);
+
+    // trigger backend data processing
     doGet('add/' + timelineValue, null);
 }
 
@@ -331,26 +350,34 @@ function removeTimeline(timeline) {
 
 }
 
-function addResults(results, timeline) {
+function regenTimeline(tl) {
+    clearResults(tl);
+    updateStatus('WAIT', tl);
+    doGet('regen/' + tl, null);
+}
+
+function addResults(results, args) {
     // Add each returned result to the timeline specified
+
+    var timeline = args[0];
 
     if (!timeline in depScrub) return;
     
     if (results == null) {
-        updateStatus('WAIT', timeline);
-        doGet('add/' + timeline, null);
+        console.log("No results found.");
         return;
     }
 
     console.log("Adding " + results.length + " results to " + timeline);
 
     for (var result in results) {
-        addResultToTimeline(timeline, results[result].start, results[result].end);
+        if (args.length > 1) addResultToTimeline(timeline, results[result].start, results[result].end, args[1]);
+        else addResultToTimeline(timeline, results[result].start, results[result].end);
     }
     
 }
 
-function addResultToTimeline(tl, start, end, tag = "", colour = "#FFDD00") {
+function addResultToTimeline(tl, start, end, colour = "#FFDD00", tag = "") {
     // Adds a given result to a given timeline, with optional tag and colour
 
     if (!timeline in depScrub) return;

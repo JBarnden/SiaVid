@@ -28,7 +28,7 @@
             <input type="button" value="Add" onclick="addNewTimeline()"><br>
 
             <input type="text" size="40" placeholder="Search terms" id="searchterms">
-            <input type="button" value="Search" onclick="executeSearch()">
+            <input type="button" value="Search All" onclick="searchAll()">
           </form>
         </div>
 
@@ -41,6 +41,9 @@
         </div>
       </div>
       </div>
+
+      <!-- Ensure background images are preloaded -->
+      <div style="visibility: hidden;"><img src="./loading.gif"></img src="./error.gif"></div>
 
     </div>
   </body>
