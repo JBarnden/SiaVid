@@ -5,7 +5,7 @@ from time import sleep
 
 from flask import Flask, request, make_response, redirect
 
-from pipeline import Pipeline, Timeline, statuses
+from pipeline import Pipeline, Timeline, statuses, READY, WAIT, OUT_OF_DATE, ERROR
 from exampleplugins import VSSChunkMiner, TrieMiner, TrieSearch, ReadFileAcquirer, AlwaysFailAcquirer, YoutubeAutoVSSAcquirer, FileToLineMiner, YoutubeAudioAcquirer, SRTChunkListToRIDict
 from SpeechRecogMiner import AudioSplitSpeechRecog
 
