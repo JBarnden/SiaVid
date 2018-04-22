@@ -64,11 +64,27 @@ def getAudioDuration(path):
     except Exception as e:
         return False
 
+class AudioChunk(object):
+    """
+        A simple data structure representing a chunk of audio.
+        This is used by SpeechRecogMiner
+    """
+    def __init__(self, startTime, endTime, fname):
+        """
+
+        :param startTime: start time of the audio chunk in milliseconds (with respect to the source audio)
+        :param endTime:  end time of the audio chunk in milliseconds (with respect to the source audio)
+        :param fname: file name with extension (not the full path)
+        """
+        self.startTime = startTime
+        self.endTime = endTime
+        self.fname = fname
+
 class AudioSplitter(DataMiner):
 
     def __init__(self, chunkSize, offset=0, tempDir="./tmp/"):
         """
-        Takes an input wav file and outputs several wav files of "chunkSize"
+        Takes an input wav file and outputs a list of several wav files of "chunkSize"
         second length.  An offset can also be given, which creates an overlap
         across clips to prevent speech in audio being missed/split in half.
 
@@ -93,7 +109,7 @@ class AudioSplitter(DataMiner):
 
         :param fname: Name of the audio file to be split (inside the given temp
         directory).
-        :return: a list of file names of the resulting audio files.
+        :return: a list of AudioChunk objects with paths to, and timestamps of the resulting audio files.
         """
 
         # Prepend temporary directory to file name
@@ -117,7 +133,8 @@ class AudioSplitter(DataMiner):
         # chunkNo is appended to the end of a file name
         chunkNo = 0
         endMS = 0
-        paths = []
+        #paths = []
+        chunks = []
 
         audioRemaining = True
         while audioRemaining:
@@ -151,17 +168,21 @@ class AudioSplitter(DataMiner):
             if not success:
             	print "AudioSplitter: Error writing audio chunk " + str(chunkNo)
             	print "chunk startMS: " + str(startMS) + ", endMS: " + str(endMS)
-            	return paths, ERROR
+            	return chunks, ERROR
 
             # Get file name of new file for list of file names to return
             newFileName = fname.split(".")[0] + '_' + str(chunkNo) + fExt
 
-            # Append path to outfile
-            paths.append(newFileName)
+            # Create audioChunk object and append it to the list of audio chunks
+            chunk = AudioChunk(startMS, endMS, newFileName)
+
+            # Append AudioChunk to list
+            chunks.append(chunk)
+
             # Increment chunk number
             chunkNo+=1
 
-        return paths, READY
+        return chunks, READY
 
     def slice(self, path, outfile, startMS, endMS):
         """
@@ -237,36 +258,36 @@ class SpeechRecogMiner(DataMiner):
         self.offsetS = offset
 
 
-    def build(self, fnames):
+    def build(self, chunkList, nThreads=-1):
         """
         Passes audio from the file(s) in "data" to the Speech Recognition
         engine, and returns one or more timestamped hypotheses as SRTChunk
         objects.
 
-        :param fnames: a single file name, or list of file names of audio files
+        :param chunkList: a single AudioChunk object, or list of AudioChunk objects.
         to be transcribed within the given temporary directory.
-        :return: a list of srt objects.
+        :return: a list of SRTChunk objects.
         """
-        if not isinstance(fnames, list):
-            fnames = [fnames]
+        if not isinstance(chunkList, list):
+            chunkList = [chunkList]
 
         chunks = []
         et = datetime.timedelta(seconds=0)
         # Offset in miliseconds
         #offsetS = self.offsetS*1000
 
-        print "Speech Recognition: Received " + str(len(fnames)) + " audio chunks."
+        print "Speech Recognition: Received " + str(len(chunkList)) + " audio chunks."
 
-        for fname in fnames:
-            if not isinstance(fname, basestring):
+        for c in chunkList:
+            if not isinstance(c, AudioChunk):
                 #raise TypeError(fname, "SpeechRecogMiner: 'fnames' must be string or list of strings.")
                 print "SpeechRecogMiner: 'fnames' must be string or list of strings."
                 return chunks, ERROR
 
-            print "Processing audio chunks " + str((float(fnames.index(fname))/len(fnames))*100) + "% complete."
+            print "Processing audio chunks " + str((float(chunkList.index(c))/len(chunkList))*100) + "% complete."
 
             # Prepend temporary directory to the file name
-            path = self.tempDir + fname
+            path = self.tempDir + c.fname
 
             # Get duration of this clip
             duration = getAudioDuration(path)
@@ -274,22 +295,17 @@ class SpeechRecogMiner(DataMiner):
             if duration == False:
                 return None, ERROR
 
-            # Set start time to previous end time at first pass
-            if et == datetime.timedelta(seconds=0):
-                st = et
-            # Apply offset to start time timestamp for subsequent passes.
-            else: st = et - datetime.timedelta(seconds=self.offsetS)
+            # Get start and end times of the chunk from the AudioChunk object
+            st = datetime.timedelta(milliseconds=c.startTime)
+            et = datetime.timedelta(milliseconds=c.endTime)
 
-            # Set end time to start time + duration
-            et = st + datetime.timedelta(seconds=duration)
-
-            # Populate an SRT chunk for this audio file and append it to the list
+            # Populate an SRTChunk from this audio chunk with the Speech Recognition engine
             chunk = self.populate_SRT_chunk(path, st, et)
             
             if chunk != None:
             	chunks.append(chunk)
             else:
-            	print "SpeechRecog Error: Problem occurred processing file " + fname
+            	print "SpeechRecog Error: Problem occurred processing file " + c.fname
             	return chunks, ERROR
 
         # Return the list of SRT chunks
@@ -386,12 +402,13 @@ if __name__ == '__main__':
 
     while True:
         opt = raw_input(
-            "Tests:\n" 
-            "1  Test SR on local file\n" 
+            "Tests:\n"
+            "1  Test SR on local file\n"
             "2  Test with video URL\n"
             "3  Exit\n\n"
             "Selection: "
         )
+
 
         if opt == str(1):
             """
@@ -402,11 +419,12 @@ if __name__ == '__main__':
             # Create application with ref to temporary files dir & configure pipeline
             app = Application(tmp)
 
-            audioFile = "How-boredom-can-lead-to-your-most-brilliant-ideas-Manoush-Zomorodi.wav"
+            #audioFile = "How-boredom-can-lead-to-your-most-brilliant-ideas-Manoush-Zomorodi.wav"
+            audioFile = "30sec.wav"
 
             # Copy audio file to tmp directory.  In a real scenario, an audio download acquirer
             # would be used to download audio from a video and return a path to it
-            copyfile('./SpeechRecognition/TestData/' + audioFile,
+            copyfile('./SpeechRecognition/TestData/FunctionalityTesting/' + audioFile,
                      app.tmpDir + audioFile)
 
             # Set up a string repeater acquirer with a path to the audio file (which just repeats a given string)
@@ -440,9 +458,10 @@ if __name__ == '__main__':
             SRTChunks = app.pl.corpus['SRCorpus']
             #SRTChunks = corpus
 
-            # Print all chunks
-            for c in SRTChunks:
-                print pretty_srt_chunk(c)
+            if SRTChunks is not None:
+                # Print all chunks
+                for c in SRTChunks:
+                    print pretty_srt_chunk(c)
 
             # Clean temp dir contents (without deleting the dir)
             app.clean()
