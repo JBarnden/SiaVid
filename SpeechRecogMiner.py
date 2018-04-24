@@ -6,6 +6,9 @@ import datetime
 import wave
 import contextlib
 import os
+from multiprocessing import cpu_count
+from threading import Lock, Thread
+
 
 # Application class just stores a pipeline object and makes sure
 # the tmp directory exists.
@@ -257,8 +260,53 @@ class SpeechRecogMiner(DataMiner):
         # Offset applied in the audio splitter
         self.offsetS = offset
 
+        # SRT chunk list and returnStatus will be updated by threads
+        self.tempSRTChunkList = []
+        self.returnStatus = WAIT
+        self.lock = Lock()
 
     def build(self, chunkList, nThreads=-1):
+        self.tempSRTChunkList = [] # Clear temp list
+
+        if nThreads == -1:
+            # Set number of threads equal to number of CPUs
+            nThreads = cpu_count()
+
+        sListSize = int(len(chunkList)/nThreads) # Calculate size of sublist
+        elementsPassed = 0 # number of elements already passed to threads in sub-list
+
+        threads = []
+
+        # Divide list of chunks among "nThreads" threads
+        for i in range(0, nThreads):
+            # Create sub-list of chunks for thread
+            subList = chunkList[elementsPassed:sListSize+1]
+            elementsPassed += sListSize
+
+            # If we're at the last iteration/thread, and chunkList didn't evenly divide by
+            # number of threads
+            if i == nThreads-1 and elementsPassed != len(chunkList):
+                # Add the last elements to the sub-list for this thread
+                subList.extend(chunkList[elementsPassed:])
+
+            # Create and start this thread
+            threads.append(Thread(target=self.thread_build, args=subList))
+            threads[i].start()
+
+        # Wait for all threads to complete before proceeding
+        for t in threads:
+            t.join()
+
+        if self.returnStatus != ERROR:
+            self.returnStatus = READY
+
+        # Order the tempSRTChunkList by startTime before returning it.
+        self.tempSRTChunkList.sort(key=lambda x: x.startTime)
+
+        return self.tempSRTChunkList, self.returnStatus
+
+
+    def thread_build(self, chunkList):
         """
         Passes audio from the file(s) in "data" to the Speech Recognition
         engine, and returns one or more timestamped hypotheses as SRTChunk
@@ -266,7 +314,6 @@ class SpeechRecogMiner(DataMiner):
 
         :param chunkList: a single AudioChunk object, or list of AudioChunk objects.
         to be transcribed within the given temporary directory.
-        :return: a list of SRTChunk objects.
         """
         if not isinstance(chunkList, list):
             chunkList = [chunkList]
@@ -293,7 +340,7 @@ class SpeechRecogMiner(DataMiner):
             duration = getAudioDuration(path)
             
             if duration == False:
-                return None, ERROR
+                self.returnStatus = ERROR
 
             # Get start and end times of the chunk from the AudioChunk object
             st = datetime.timedelta(milliseconds=c.startTime)
@@ -303,14 +350,19 @@ class SpeechRecogMiner(DataMiner):
             chunk = self.populate_SRT_chunk(path, st, et)
             
             if chunk != None:
-            	chunks.append(chunk)
+                chunks.append(chunk)
             else:
-            	print "SpeechRecog Error: Problem occurred processing file " + c.fname
-            	return chunks, ERROR
+                print "SpeechRecog Error: Problem occurred processing file " + c.fname
+                self.returnStatus = ERROR
+
+            # Add this list of chunks to the master list of chunks
+            self.lock.acquire()
+            self.tempSRTChunkList.extend(chunks)
+            self.lock.release()
+
 
         # Return the list of SRT chunks
-        return chunks, READY
-
+        #return chunks, READY
 
     def populate_SRT_chunk(self, pathToAudio, startTime, endTime):
         """
@@ -366,8 +418,8 @@ class AudioSplitSpeechRecog(DataMiner):
         srtChunks, status = self.SRMiner.build(listOfPaths)
         
         if status == ERROR:
-        	print "AudioSplitSpeechRecog: SpeechRecog error, returning None."
-        	return None, ERROR
+            print "AudioSplitSpeechRecog: SpeechRecog error, returning None."
+            return None, ERROR
 
         return srtChunks, READY
 
