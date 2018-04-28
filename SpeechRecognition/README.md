@@ -5,21 +5,21 @@ This module provides a wrapper class for testing Speech Recognition engines incl
 ## Contents
 
 * [Dependencies](#markdown-header-dependencies)
-* [SpeechRecognitionWrapper] (#markdown-header-SpeechRecognitionWrapper-class)
-    * [Speech to Text] (#markdown-header-speech-to-text)
-    * [Evaluating a Hypothesis] (#markdown-header-evaluating-a-hypothesis)
-    * [Running a bulk Evaluation] (#markdown-header-running-a-bulk-evaluation)
-* [Logger] (#markdown-header-logger)
+* [SpeechRecognitionWrapper](#markdown-header-SpeechRecognitionWrapper-class)
+    * [Speech to Text](#markdown-header-Speech-To-Text)
+    * [Evaluating a Hypothesis](#markdown-header-Evaluating-a-Hypothesis)
+    * [Running a Bulk Evaluation](#markdown-header-Running-a-Bulk-Evaluation)
+* [Logger](#markdown-header-Logger)
 
 ## Dependencies
 `SpeechRecognitionWrapper` relies on `SpeechRecognition 3.8.1+` for speech to text functionality, `string` for loading subtitle files, `time` to measure execution time, and `numpy` for the word error rate calculator.
 
-## SpeechRecognitionWrapper class
+## SpeechRecognitionWrapper class<a name="SRWClass">
 Inside the class:
     * `_r` - an instance of a `SpeechRecognition` `Recognizer` object.
     * `SL` - a list of supported language codes for `pocketsphinx`
 
-### Speech to Text
+### Speech to Text<a id="SpeechToText">
 The `speech_to_text` function takes the path to an audio file, decodes the file, and attempts to recognize speech within the decoded audio using one or more SR engines.
 
 By default, the recognition language is US english (en-US) which is currently the only supported language.  For information on extending the available languages, see: https://github.com/Uberi/speech_recognition/blob/master/reference/pocketsphinx.rst
@@ -44,7 +44,7 @@ Example usage:
     print hypothesis
 ```
 
-### Evaluating a Hypothesis
+### Evaluating a Hypothesis<a name="Eval">
 A hypothesis can be evaluated agains a given reference transcript with the `word_error_rate` function.  The reference transcript must be stripped of any punctuation and normalised before being used for evaluation.  The `load_subs` function converts a subtitles file (VSS or srt) into an appropriate format for evaluation.
 
 The word error rate is the Levenshtein Distance between reference and hypothesis strings, divided by the number of words in the reference string.  The Levenshtein Distance is described as the shortest distance between two strings (the minimum of the insertions, deletions and substitutions).  By default, insertions, deletions and substitutions all have an associated cost of 1, although the cost of each can be ammended via kwargs (see function docstring). 
@@ -74,7 +74,7 @@ Example of generating a hypothesis and evaluating it:
 ```
 
 
-### Running a bulk Evaluation
+### Running a Bulk Evaluation<a name="BulkEval">
 The `evaluate` function enables the automatic evaluation of an engine with multiple audio files and corresponding transcripts.  In order for this to work, the reference transcripts must be `.txt` files, whose names match their corresponding audio files (e.g. `my_audio.wav` `my_audio.txt`).  The reference transcripts and audio files should also be in the same directory.
 The function returns a dictionary of `(audioFileName, WordErrorRate)` items.
 
@@ -96,7 +96,7 @@ Example bulk evaluation:
 
 In the future, the bulk evaluation function will be extended to support the alteration of recognition engine parameters.
 
-# Logger
+# Logger<a id="Logger">
 The `Logger` class was included to save anything sent to stdout to a text file for later review, this is particularly useful for debugging purposes.
 
 Using the logger:
