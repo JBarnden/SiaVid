@@ -19,7 +19,7 @@ Inside the class:
     * `_r` - an instance of a `SpeechRecognition` `Recognizer` object.
     * `SL` - a list of supported language codes for `pocketsphinx`
 
-### Speech to Text<a id="SpeechToText">
+### Speech to Text
 The `speech_to_text` function takes the path to an audio file, decodes the file, and attempts to recognize speech within the decoded audio using one or more SR engines.
 
 By default, the recognition language is US english (en-US) which is currently the only supported language.  For information on extending the available languages, see: https://github.com/Uberi/speech_recognition/blob/master/reference/pocketsphinx.rst
