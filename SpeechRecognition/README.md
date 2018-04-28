@@ -5,10 +5,10 @@ This module provides a wrapper class for testing Speech Recognition engines incl
 ## Contents
 
 * [Dependencies](#markdown-header-dependencies)
-* [SpeechRecognitionWrapper](#markdown-header-SpeechRecognitionWrapper-class)
-    * [Speech to Text](#markdown-header-Speech-To-Text)
-    * [Evaluating a Hypothesis](#markdown-header-Evaluating-a-Hypothesis)
-    * [Running a Bulk Evaluation](#markdown-header-Running-a-Bulk-Evaluation)
+* [SpeechRecognitionWrapper](#markdown-header-speechrecognitionwrapper-class)
+    * [Speech to Text](#markdown-header-speech-to-text)
+    * [Evaluating a Hypothesis](#markdown-header-evaluating-a-hypothesis)
+    * [Running a Bulk Evaluation](#markdown-header-running-a-bulk-evaluation)
 * [Logger](#markdown-header-Logger)
 
 ## Dependencies
