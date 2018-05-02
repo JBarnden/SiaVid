@@ -5,11 +5,11 @@ This module provides a wrapper class for testing Speech Recognition engines incl
 ## Contents
 
 * [Dependencies](#markdown-header-dependencies)
-* [SpeechRecognitionWrapper] (#markdown-header-SpeechRecognitionWrapper)
-    * [Speech to Text] (#markdown-header-speech-to-text)
-    * [Evaluating a Hypothesis] (#markdown-header-evaluating-a-hypothesis)
-    * [Running a bulk Evaluation] (#markdown-header-running-a-bulk-evaluation)
-* [Logger] (#markdown-header-logger)
+* [SpeechRecognitionWrapper](#markdown-header-speechrecognitionwrapper-class)
+    * [Speech to Text](#markdown-header-speech-to-text)
+    * [Evaluating a Hypothesis](#markdown-header-evaluating-a-hypothesis)
+    * [Running a Bulk Evaluation](#markdown-header-running-a-bulk-evaluation)
+* [Logger](#markdown-header-Logger)
 
 ## Dependencies
 `SpeechRecognitionWrapper` relies on `SpeechRecognition 3.8.1+` for speech to text functionality, `string` for loading subtitle files, `time` to measure execution time, and `numpy` for the word error rate calculator.
@@ -74,7 +74,7 @@ Example of generating a hypothesis and evaluating it:
 ```
 
 
-### Running a bulk Evaluation
+### Running a Bulk Evaluation
 The `evaluate` function enables the automatic evaluation of an engine with multiple audio files and corresponding transcripts.  In order for this to work, the reference transcripts must be `.txt` files, whose names match their corresponding audio files (e.g. `my_audio.wav` `my_audio.txt`).  The reference transcripts and audio files should also be in the same directory.
 The function returns a dictionary of `(audioFileName, WordErrorRate)` items.
 
