@@ -1,6 +1,6 @@
 from threading import Thread, current_thread, Lock
 from time import sleep
-import logging
+import logging, pickle, os
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -213,19 +213,19 @@ class Pipeline:
 	def addAcquirer(self, acquirer, tag):
 		""" Add a new acquirer tagged 'tag' """
 
-		logger.info("Adding acquirer '{0}'.".format(tag))
+		logger.info("Adding acquirer '{0}'".format(tag))
 		self.acquire[tag] = acquirer
 
 	def removeAcquirer(self, tag):
 		""" Remove the acquirer tagged 'tag' """
 
 		if self.acquire.has_key(tag):
-			logger.info("Deleting acquirer '{0}'.".format(tag))
+			logger.info("Deleting acquirer '{0}'".format(tag))
 			del self.acquire[tag]
 			if self.rawData.has_key(tag):
 				del self.rawData[tag]
 		else:
-			logger.error("No acquirer '{0}'.".format(tag))
+			logger.error("No acquirer '{0}'".format(tag))
 
 	def listMiners(self):
 		""" Returns list of currently registered data miners """
@@ -235,17 +235,17 @@ class Pipeline:
 	def addMiner(self, miner, tag):
 		""" Add a new data miner tagged 'tag' """
 
-		logger.info("Adding miner '{0}'.".format(tag))
+		logger.info("Adding miner '{0}'".format(tag))
 		self.mine[tag] = miner
 
 	def removeMiner(self, tag):
 		""" Remove the data miner tagged 'tag' """
 
 		if self.mine.has_key(tag):
-			logger.info("Deleting miner '{0}'.".format(tag))
+			logger.info("Deleting miner '{0}'".format(tag))
 			del self.acquire[tag]
 		else:
-			logger.error("No miner '{0}'.".format(tag))
+			logger.error("No miner '{0}'".format(tag))
 
 	def listSearch(self):
 		""" Returns list of currently registered search engines """
@@ -255,17 +255,17 @@ class Pipeline:
 	def addSearch(self, search, tag):
 		""" Add a new search engine tagged 'tag' """
 
-		logger.info("Adding search '{0}'.".format(tag))
+		logger.info("Adding search '{0}'".format(tag))
 		self.search[tag] = search
 
 	def removeSearch(self, tag):
 		""" Remove the search engine tagged 'tag' """
 
 		if self.search.has_key(tag):
-			logger.info("Deleting search '{0}'.".format(tag))
+			logger.info("Deleting search '{0}'".format(tag))
 			del self.search[tag]
 		else:
-			logger.error("No search '{0}'.".format(tag))
+			logger.error("No search '{0}'".format(tag))
 
 	def performSearch(self, corpusTag, searchTag, searchTerms):
 		""" Perform a search on a given corpus with a given search engine, using searchterms
@@ -274,11 +274,11 @@ class Pipeline:
 		logger.info("Performing search on corpus '{0}' with engine '{1}', terms '{2}'".format(corpusTag, searchTag, searchTerms))
 
 		if not self.search.has_key(searchTag):
-			logger.error("No search '{0}' available.".format(searchTag))
+			logger.error("No search '{0}' available".format(searchTag))
 			return
 
 		if not self.corpus.has_key(corpusTag):
-			logger.error("No corpus '{0}' available.".format(corpusTag))
+			logger.error("No corpus '{0}' available".format(corpusTag))
 			return
 
 		return self.search[searchTag].performSearch(self.corpus[corpusTag], searchTerms)
@@ -287,14 +287,12 @@ class Pipeline:
 		""" Performs an Acquire using the tagged Acquirer and stores
 			the results in rawData with the acquirer's tag """
 
-		t = current_thread().name
-
 		with self.acquire[acquireTag].lock:
 			if self.acquire[acquireTag].status != READY:
 				logger.info("Acquiring to data '{}' using Acquirer '{}'".format(acquireTag, acquireTag))
 				self.rawData[acquireTag] = self.acquire[acquireTag].performAcquire(*acquireArgs)
 			elif self.acquire[acquireTag].status == READY:
-				logger.info("Data '{}' already exists; skipping.".format(acquireTag))
+				logger.info("Data '{}' already exists; skipping".format(acquireTag))
 
 	def performAsyncAcquire(self, acquireTag, *acquireArgs):
 		""" Performs an Acquire using the tagged Acquirer and stores
@@ -312,15 +310,13 @@ class Pipeline:
 
 	def buildCorpus(self, minerTag, corpusTag, acquireTag):
 		""" Generate a corpus from a given dataset using a given miner """
-
-		t = current_thread().name
 		
 		with self.mine[minerTag].lock:
 			if self.mine[minerTag].status != READY:
 				logger.info("Building corpus '{}' from rawData '{}' using miner '{}'".format(corpusTag, acquireTag, minerTag))
 				self.corpus[corpusTag] = self.mine[minerTag].buildCorpus(self.rawData[acquireTag])
 			elif self.mine[minerTag].status == READY:
-				logger.info("Corpus '{}' already exists; skipping.".format(corpusTag))
+				logger.info("Corpus '{}' already exists; skipping".format(corpusTag))
 
 	def buildAsyncCorpus(self, minerTag, corpusTag, acquireTag):
 		""" Generate a corpus from a given dataset using a given miner """
@@ -339,7 +335,74 @@ class Pipeline:
 				logger.info("Reprocessing corpus '{}' to corpus '{}' using miner '{}'".format(sourceCorpusTag, destCorpusTag, minerTag))
 				self.corpus[destCorpusTag] = self.mine[minerTag].buildCorpus(self.corpus[sourceCorpusTag])
 			elif self.mine[minerTag].status == READY:
-				logger.info("Corpus '{}' already exists; skipping.".format(destCorpusTag))
+				logger.info("Corpus '{}' already exists; skipping".format(destCorpusTag))
+
+
+	def clearMemory(self):
+		""" Removes all data from the pipeline ready for a fresh video.
+		"""
+
+		for acTag in self.acquire:
+			self.acquire[acTag].status = OUT_OF_DATE
+
+		for mineTag in self.mine:
+			self.mine[mineTag].status = OUT_OF_DATE
+
+		self.rawData = {}
+		self.corpus = {}
+
+	def saveCorpus(self, corpusTag, id):
+		""" Pickles and saves a given searchable corpus to the storage
+			folder, tagged with both the video ID and the name of the
+			corpus.
+		"""
+
+		if not self.corpus.has_key(corpusTag) or not self.corpus[corpusTag]:
+			logger.error("Corpus {} does not exist and has not been saved".format(corpusTag))
+		else:
+			saveDir = './sav/'
+			vidDir = saveDir + id + "/"
+			filename = vidDir + corpusTag
+
+			if not os.path.isdir(vidDir):
+				os.mkdir(vidDir)
+
+			with open(filename, "w") as file:
+				pickle.dump(self.corpus[corpusTag], file)
+				logger.info("Corpus saved to {}".format(filename))
+
+	def loadCorpus(self, corpusTag, id):
+		""" Loads and unpickles a given searchable corpus from the
+			storage folder.
+			Returns True if file exists, False if not.
+		"""
+
+		saveDir = './sav/'
+		filename = saveDir + id + "/" + corpusTag 
+
+		if os.path.isfile(filename):
+			logger.info("Loading saved corpus {}".format(filename))
+
+			with open(filename, "r") as file:
+				self.corpus[corpusTag] = pickle.load(file)
+			return True
+		else:
+			logger.info("No saved corpus {}".format(filename))
+		
+		return False
+
+	def deleteSavedCorpus(self, corpusTag, id):
+		""" Removes a saved searchable corpus from the storage folder.
+		"""
+
+		saveDir = './sav/'
+		filename = saveDir + id + "/" + corpusTag 
+
+		if os.path.isfile(filename):
+			logger.info("Deleting saved corpus {}".format(filename))
+			os.remove(filename)
+		else:
+			logger.info("No corpus {} to delete".format(filename))
 
 
 	def reportStatus(self):
@@ -381,6 +444,29 @@ class Pipeline:
 
 		timeline.status = OUT_OF_DATE
 
+	def saneTimeline(self, timeline):
+		""" Checks a given timeline's plugins for existence and
+			ensures that its acquirer/miner lists are lists.
+		"""
+
+		if type(timeline.acquirer) != list:
+			timeline.acquirer = [timeline.acquirer]
+		if type(timeline.miner) != list:
+			timeline.miner= [timeline.miner]
+		
+		for ac in timeline.acquirer:
+			if not self.acquire.has_key(ac):
+				return False
+
+		for mine in timeline.miner:
+			if not self.mine.has_key(mine):
+				return False
+
+		if not self.search.has_key(timeline.search):
+			return False
+
+		return True
+
 	def generateTimeline(self, timeline, *acquireArgs):
 		""" Given a timeline, takes the steps necessary to prepare that
 			timeline for search, and updates its status as necessary.
@@ -388,15 +474,18 @@ class Pipeline:
 
 		# TODO: Proper error handling.
 
+		# Ensure timeline can be generated
+
+		if not self.saneTimeline(timeline):
+			timeline.status = ERROR
+			logger.error("Timeline {} is missing plugins.".format(timeline.prettyName))
+			return
+
 		t = current_thread().name
 		timeline.status = WAIT
 
 		# result will hold ERROR only if this timeline triggered the error
 		result = None
-
-		# Ensure we always have a list of Acquirers
-		if type(timeline.acquirer) != list:
-			timeline.acquirer = [timeline.acquirer]
 
 		acquireIndex = 0 # stores the index of the successful acquirer, if any
 
@@ -414,17 +503,13 @@ class Pipeline:
 			logger.error("No successful acquisition among acquirers {}".format(timeline.acquirer))
 			return
 
-		# Ensure we always have a list of DataMiners
-		if type(timeline.miner) != list:
-			timeline.miner = [timeline.miner]
-
 		# perform initial mine
 		result = self.buildCorpus(timeline.miner[0], timeline.corpus[0], timeline.acquirer[acquireIndex])
 
 		# Did the prior mine complete successfully?
 		if self.getMinerStatus(timeline.miner[0]) == ERROR:
 			timeline.status = ERROR
-			logger.error("Error in miner {}.".format(timeline.miner[0]))
+			logger.error("Error in miner {}".format(timeline.miner[0]))
 			return
 
 		# process remaining miner steps, if any
@@ -434,9 +519,9 @@ class Pipeline:
 
 			# check for errors
 			if self.getMinerStatus(timeline.miner[index]) == ERROR:
-				logger.error("Error in miner {}.".format(timeline.miner[index]))
+				logger.error("Error in miner {}".format(timeline.miner[index]))
 				timeline.status = ERROR
 				return
 
-		logger.info("{} done.".format(timeline.prettyName))
+		logger.info("{} done".format(timeline.prettyName))
 		timeline.status = READY

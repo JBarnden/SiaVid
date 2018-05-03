@@ -133,6 +133,59 @@ class YoutubeMediaAcquirer(Acquirer):
 
 		return self.subfilename, READY
 
+
+class YoutubeAudioAcquirer(Acquirer):
+	"""	
+		Requires ffmpeg and ffprobe, or avprobe and avconv on the host system
+		(apt-get install libav-tools installs avconv and avprobe
+		on linux)
+	"""
+	def __init__(self, tempDir='./tmp/'):
+		Acquirer.__init__(self, tempDir)
+		self.downloadPath = ''
+		self.setOptions({
+                'outtmpl': unicode(tempDir + '%(id)s.%(ext)s'),
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'wav',
+                'preferredquality': '192',
+            }],
+            })
+
+	def filenameCatcher(self, event):
+		print "Catcher triggered:", event
+		if event['status'] == 'finished':
+			self.downloadPath = event['filename']
+
+	def setOptions(self, opts):
+		opts['progress_hooks'] = [self.filenameCatcher]
+		self.ydl_opts = opts
+
+	def acquire(self, *url):
+		"""
+			The acquire method attempts to download a video from a youtube url
+			(webm format).  The video is then converted to wav (as stated in
+			the initial options in init).
+		"""
+		self.downloadPath = ''
+
+		with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
+			ydl.download(url)
+
+		if self.downloadPath == '':
+			print "ERROR"
+			return self.downloadPath, ERROR
+
+		# Use ntpath to get file name (for compatibility with windows)
+		import ntpath
+		audioFileName = ntpath.basename(self.downloadPath)
+		# File name returned has the extention ".webm", its replaced with ".wav"
+		# manually (quick and dirty).
+		audioFileName = audioFileName.split('.')[0] + ".wav"
+
+		return audioFileName, READY
+
 class FileToLineMiner(DataMiner):
 	def build(self, data):
 		lines = []
