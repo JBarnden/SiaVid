@@ -1,6 +1,6 @@
 from pipeline import DataMiner, SearchEngine, READY, ERROR
 from skimage import feature
-import timeit
+import timeit, Set
 
 import cv2, os
 
@@ -16,10 +16,13 @@ class FaceList:
 class FaceChunk:
 	""" A list of which faces appear within a given chunk of time
 	"""
-	def __init__(self, startTime, endTime, clusterID):
+	def __init__(self):
+		self.__init__(None, None, None)
+
+	def __init__(self, startTime, endTime, clusters):
 		self.startTime = startTime
 		self.endTime = endTime
-		self.clusterID = clusterID
+		self.clusters = clusters
 
 class VideoFaceFinder(DataMiner):
 	""" Takes a video and returns a list of FaceLists holding extracted faces
@@ -143,8 +146,31 @@ class FaceSearchMiner(DataMiner):
 			Selects one image representing each cluster and outputs it to faceFolder/[index].png
 			Returns list of FaceChunks containing startTime, endTime and cluster IDs appearing between
 		"""
+		
+		chunks = []
 
-		pass
+		# sliding window for current chunk
+		start = 0
+		end = self.chunkSize
+
+		# Clusters that exist in current chunk
+		clusters = []
+
+		for face in data[1:]:
+			while end < face.time:
+				# Save current data (if any)
+				if len(clusters) > 0:
+					chunks.append(FaceChunk(start, end, clusters))
+					clusters = []
+				
+				# Move window along
+				start = end
+				end += self.chunkSize
+
+			if face.cluster not in clusters:
+				clusters.append(face.cluster)
+
+		return chunks, READY
 
 class FaceSearch(SearchEngine):
 	def doSearch(self, corpus, terms):
