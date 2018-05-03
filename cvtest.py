@@ -23,13 +23,6 @@ class FaceChunk:
 		self.startTime = startTime
 		self.endTime = endTime
 
-class Cluster:
-	""" A list of FaceChunks bound to a cluster ID
-	"""
-
-	def __init__(self):
-		self.chunks = []
-
 class VideoFaceFinder(DataMiner):
 	""" Takes a video and returns a list of FaceLists holding extracted faces
 	"""
@@ -168,9 +161,9 @@ class FaceSearchMiner(DataMiner):
 
 			# add a new cluster indexed by current ID if necessary
 			if face.cluster not in clusters:
-				clusters[face.cluster] = Cluster()
+				clusters[face.cluster] = []
 
-			clusters[face.cluster].chunks.append(FaceChunk(start, end))
+			clusters[face.cluster].append(FaceChunk(start, end))
 
 		return clusters, READY
 
@@ -186,7 +179,7 @@ class FaceSearch(SearchEngine):
 			term = int(term)
 			if term not in corpus:
 				continue
-			for result in corpus[term].chunks:
+			for result in corpus[term]:
 				results.add(result)
 		
 		return results
