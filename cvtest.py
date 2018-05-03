@@ -68,6 +68,11 @@ class FaceFinder(DataMiner):
 			# images showing one cropped face each. We want
 			# to convert these to feature vectors
 
+			chunk.content = faceToVector(chunk.content)
+
+			# return final processed faces
+			results.append(chunk)
+
 		cap.release()
 		return results, READY
 
@@ -94,7 +99,7 @@ class FaceFinder(DataMiner):
 
 	def faceToVector(self, faces):
 		# Turn a face image(?) into a feature vector somehow
-		return []
+		return faces
 
 
 if __name__ == '__main__':
