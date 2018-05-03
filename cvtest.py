@@ -1,13 +1,13 @@
 from pipeline import DataMiner, SearchEngine, READY, ERROR
 from skimage import feature
-import timeit, Set
+from sets import Set
+import timeit
 
 import cv2, os
 
 class FaceList:
 	""" Binds a list of captured faces to the time index where it was captured
 	"""
-
 	def __init__(self, time):
 		self.time = time
 		self.content = []
@@ -19,10 +19,16 @@ class FaceChunk:
 	def __init__(self):
 		self.__init__(None, None, None)
 
-	def __init__(self, startTime, endTime, clusters):
+	def __init__(self, startTime, endTime):
 		self.startTime = startTime
 		self.endTime = endTime
-		self.clusters = clusters
+
+class Cluster:
+	""" A list of FaceChunks bound to a cluster ID
+	"""
+
+	def __init__(self):
+		self.chunks = []
 
 class VideoFaceFinder(DataMiner):
 	""" Takes a video and returns a list of FaceLists holding extracted faces
@@ -135,7 +141,7 @@ class FaceClusterer(DataMiner):
 		return data, READY
 
 class FaceSearchMiner(DataMiner):
-	def __init__(self, chunkSize=5, faceFolder='./face/'):
+	def __init__(self, chunkSize=3, faceFolder='./face/'):
 		self.chunkSize = chunkSize # ultimate length of chunks
 		self.faceFolder = faceFolder # folder for outputting faces
 		if not os.path.isdir(faceFolder):
@@ -144,41 +150,46 @@ class FaceSearchMiner(DataMiner):
 	def build(self, data):
 		""" Receives list of [clusterCount, FaceList0, ..., FaceListn]
 			Selects one image representing each cluster and outputs it to faceFolder/[index].png
-			Returns list of FaceChunks containing startTime, endTime and cluster IDs appearing between
+			Returns reverse-indexed dict of Clusters by clusterID, containing FaceChunks with
+			startTime and endTime.
 		"""
 		
-		chunks = []
+		clusters = {}
 
 		# sliding window for current chunk
 		start = 0
 		end = self.chunkSize
 
-		# Clusters that exist in current chunk
-		clusters = []
-
 		for face in data[1:]:
-			while end < face.time:
-				# Save current data (if any)
-				if len(clusters) > 0:
-					chunks.append(FaceChunk(start, end, clusters))
-					clusters = []
-				
-				# Move window along
+			# Do we need to move window along?
+			while end < face.time:				
 				start = end
 				end += self.chunkSize
 
+			# add a new cluster indexed by current ID if necessary
 			if face.cluster not in clusters:
-				clusters.append(face.cluster)
+				clusters[face.cluster] = Cluster()
 
-		return chunks, READY
+			clusters[face.cluster].chunks.append(FaceChunk(start, end))
+
+		return clusters, READY
 
 class FaceSearch(SearchEngine):
-	def doSearch(self, corpus, terms):
-		""" Receives list of FaceChunks and list of cluster IDs, returns list of clusters
-			containing those IDs.
+	def performSearch(self, corpus, terms):
+		""" Return a set of start and end times encompassing the union of
+			all classes referred to in terms.
 		"""
-		pass
 
+		results = Set() # only want unique results
+		
+		for term in terms:
+			term = int(term)
+			if term not in corpus:
+				continue
+			for result in corpus[term].chunks:
+				results.add(result)
+		
+		return results
 
 if __name__ == '__main__':
 	tempDir = './tmp/faceoutput/'
@@ -186,24 +197,38 @@ if __name__ == '__main__':
 	fv = FaceVectoriser()
 
 	fc = FaceClusterer('./Frontend-Web/faces/')
+	fm = FaceSearchMiner()
 	fs = FaceSearch()
 
 	if not os.path.isdir(tempDir):
 		os.makedirs(tempDir)
 
-	chunks, status = ff.build('./tmp/wGkvyN6s9cY.mp4')
-	print len(chunks), chunks[0]
-	processedChunks, status = fv.build(chunks)
-	print len(processedChunks), processedChunks[0]
+	#chunks, status = ff.build('./tmp/wGkvyN6s9cY.mp4')
+	#print len(chunks), chunks[0]
+	#processedChunks, status = fv.build(chunks)
+	#print len(processedChunks), processedChunks[0]
 
-	for i in range(0, len(chunks)):
+	#for i in range(0, len(chunks)):
 		
-		for j in range(0, len(chunks[i].content)):
-			print("Outputting face " + str(j) + ", time: " + str(chunks[i].time))
-			cv2.imwrite(tempDir + str(chunks[i].time) + "_" + str(j) + '.png', chunks[i].content[j])
-			cv2.imwrite(tempDir + str(chunks[i].time) + "_p" + str(j) + '.png', processedChunks[i].content[j])
+	#	for j in range(0, len(chunks[i].content)):
+	#		print("Outputting face " + str(j) + ", time: " + str(chunks[i].time))
+	#		cv2.imwrite(tempDir + str(chunks[i].time) + "_" + str(j) + '.png', chunks[i].content[j])
+	#		cv2.imwrite(tempDir + str(chunks[i].time) + "_p" + str(j) + '.png', processedChunks[i].content[j])
 
-	# output done
+	input = [2, FaceList(49.0), FaceList(50.0), FaceList(50.0), FaceList(54.0), FaceList(71.0)]
+	input[1].cluster = 0
+	input[2].cluster = 0
+	input[3].cluster = 1
+	input[4].cluster = 0
+	input[5].cluster = 1
+
+	corpus, status = fm.build(input)
+
+	result = fs.performSearch(corpus, ["1", "3"])
+
+	print result
+	for chunk in result:
+		print chunk.startTime, chunk.endTime
 
 	#ff.build('./tmp/wGkvyN6s9cY.mp4')
 	#print timeit.timeit("ff.build('./tmp/wGkvyN6s9cY.mp4')", setup="from __main__ import FaceFinder; ff = FaceFinder('./tmp/faceoutput/')",number=1)
