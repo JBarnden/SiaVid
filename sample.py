@@ -13,6 +13,7 @@ app = Flask(__name__, static_url_path='', static_folder=os.getcwd() + '/Frontend
 
 pl = Pipeline()
 timelines = {}
+faceTimelines = []
 
 # initial URL - changed by /setURL
 url = "https://www.youtube.com/watch?v=wGkvyN6s9cY"
@@ -47,13 +48,14 @@ def setURL():
 
 @app.route("/getTimelines/")
 def getSearch():
-    """ Returns a list of available timelines and their prettynames
-    """
-
-    result = {}
+    result = []
+    timelineList = {}
 
     for name in timelines:
-        result[name] = timelines[name].prettyName
+        timelineList[name] = timelines[name].prettyName
+
+    result.append(timelineList)
+    result.append(faceTimelines)
 
     resp = make_response(json.dumps(result))
     resp.headers['Access-Control-Allow-Origin'] = '*'
@@ -91,6 +93,7 @@ def doSearch(timeline):
 
             terms = request.form['searchterms'] # TODO: Sanitising of search terms
             terms = terms.encode("ascii").lower()
+            terms = terms.strip()
             terms = terms.split(" ")
 
             results = pl.performSearch(corpus, search, terms)
@@ -153,6 +156,18 @@ def regenerate(timeline):
 
     t = Thread(target=pl.generateTimeline, name = timeline, args=(timelines[timeline], url))
     t.start()
+
+# Special-cased route for acquiring face information
+@app.route("/getfaces/<timeline>", methods=['GET'])
+def getFaces(timeline):
+    faces = []
+    if timeline in timelines:
+        corpus = pl#.getCorpus(timelines[timeline].corpus[-1])
+        faces = [3, 1, 2]#corpus[0]
+
+    resp = make_response(json.dumps(faces))
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp       
 
 # Initial setup...
 
@@ -219,6 +234,14 @@ if __name__ == "__main__":
         ['fileline', 'vssminer2', 'trieminer2'],  # corpusTags in order
         'triesearch'                            # searchTag
     )
+
+    faceTimelines.append('facerecog')
+    timelines['facerecog'] = Timeline()
+    timelines['facerecog'].prettyName = "Facial recognition"
+    timelines['facerecog'].acquirer = 'ytautosub'
+    timelines['facerecog'].miner = ['fileline', 'vssminer', 'trieminer']
+    timelines['facerecog'].corpus = ['fileline', 'vssminer', 'trieminer']
+    timelines['facerecog'].search = 'triesearch'
 
     # Test timelines done
 

@@ -62,6 +62,7 @@ var requestURL = "./" // Root URL for backend RQs
 var depScrub = {}; // Holds slave scrubber instances and references to their TLs
 var scrub; // holds master scrubber and reference to timeline
 var oldElapsed; // Check to see if video has moved when scrubbing is needed.
+var faces = []; // list of timelines that are exempt from search-in-all
 
 ///////////////////////////////////////////////////
 //
@@ -90,6 +91,7 @@ function updateStatus(status, tlIndex) {
 
     if (status == 'READY') {
         depScrub[tlIndex].tl.style.backgroundImage = 'none';
+        if (tlIndex == 'facerecog') doGet('getfaces/facerecog', updateFaces);
     }
     if (status == 'WAIT') {
         depScrub[tlIndex].tl.style.backgroundImage = "url('./loading.gif')";
@@ -167,11 +169,16 @@ function setTimelineTypes(timelines) {
     
     console.log("Got timelines from server.");
 
+    // note timelines that are special-cased
+    faces = timelines[1];
+
+    // Add timelines
     types = document.getElementById('types');
-    for (var tl in timelines) {
+
+    for (var tl in timelines[0]) {
         newOption = document.createElement('option');
         newOption.setAttribute('value', tl);
-        newOption.innerText = timelines[tl];
+        newOption.innerText = timelines[0][tl];
         types.appendChild(newOption);
     }
 }
@@ -200,15 +207,63 @@ function searchAll(clear=true) {
 
     for (tl in depScrub) {
         if (depScrub[tl].status != "READY") continue;
+        if (faces.includes(tl)) continue;
 
         if (clear) clearResults(tl);
         searchTimeline(tl, params);
     }
 }
 
+function updateFaces(faceData) {
+    if (faceData == null) {
+        console.log("Unable to acquire face data.");
+        return;
+    }
 
+    form = document.getElementById('faceForm');
 
+    for (var i = 0; i < faceData.length; i++) {
+        var checkBox = document.createElement("INPUT");
+        checkBox.setAttribute("type", "checkbox");
+        checkBox.setAttribute("value", i);
+        checkBox.onclick = searchFaces;
+        
+        var span = document.createElement("span");
+        span.setAttribute("class", "faceform")
+        span.appendChild(checkBox);
 
+        for (var j = 0; j < faceData[i]; j++) {
+            var img = document.createElement("IMG");
+            img.setAttribute("width", "50");
+            img.setAttribute("height", "50");
+            img.setAttribute("src", "./faces/" + i + "_" + j + ".png");
+
+            span.appendChild(img);
+        }
+        form.appendChild(span);
+    }
+
+}
+
+function searchFaces() {
+    // Special-cased search for face recognition timeline
+
+    var tl = 'facerecog';
+
+    var selection = document.getElementById('faceForm');
+    var terms = "searchterms=";
+
+    for (var i = 0; i < selection.children.length; i++) {
+        var span = selection.children[i];
+        for (var j = 0; j < span.children.length; j++) {
+            if (span.children[j].checked == true)
+                terms += span.children[j].value + " ";
+        }
+    }
+ 
+    clearResults(tl);
+    if (terms != "searchterms=") searchTimeline(tl, terms);
+}
 
 
 
@@ -295,12 +350,31 @@ function addNewTimeline() {
         newTimeline = document.createElement("DIV"),        // Create actual timeline
         scrubber = document.createElement("DIV");           // Create scrubber for tl
 
-    // Add link with call to removeTimeline()
-    frame.innerHTML = timelineName + 
-        " [<a class='title' href='javascript: searchOne(\"" + timelineValue + "\", false)'>Add results to this timeline</a>]" +
-        " [<a class='title' href='javascript: clearResults(\"" + timelineValue + "\")'>Clear results from this timeline</a>]" +
-        " [<a class='title' href='javascript: regenTimeline(\"" + timelineValue + "\")'>Re-generate this timeline</a>]" +
-        " [<a class='title' href='javascript: removeTimeline(\"" + timelineValue + "\")'>Remove this timeline</a>]";
+    var html = "";
+
+    if (!faces.includes(timelineValue)) { // most timelines
+
+        // Add links with calls to searchOne(), clearResults(), regenTimeline(), removeTimeline()
+        html = timelineName + 
+            " [<a class='title' href='javascript: searchOne(\"" + timelineValue + "\", false)'>Add results to this timeline</a>]" +
+            " [<a class='title' href='javascript: clearResults(\"" + timelineValue + "\")'>Clear results from this timeline</a>]" +
+            " [<a class='title' href='javascript: regenTimeline(\"" + timelineValue + "\")'>Re-generate this timeline</a>]" +
+            " [<a class='title' href='javascript: removeTimeline(\"" + timelineValue + "\")'>Remove this timeline</a>]";
+
+        
+
+    } else {
+        if (timelineValue == 'facerecog') { // special-cased face timeline
+            html = timelineName + 
+                " [<a class='title' href='javascript: regenTimeline(\"" + timelineValue + "\")'>Re-generate this timeline</a>]" +
+                " [<a class='title' href='javascript: removeTimeline(\"" + timelineValue + "\")'>Remove this timeline</a>]";
+            
+            // append checkboxes
+            html += "<br>\n<div><form id='faceForm'></form></div>"
+        }
+    }
+
+    frame.innerHTML = html;
 
     frame.setAttribute('class', 'timelineFrame');
     scrubber.setAttribute('class', 'dependentScrubber');
