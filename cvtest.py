@@ -12,6 +12,7 @@ class FaceList:
 		self.time = time
 		self.content = []
 		self.cluster = None
+		self.LBP_Vectors = []
 
 class FaceChunk:
 	""" A list of which faces appear within a given chunk of time
@@ -74,7 +75,7 @@ class VideoFaceFinder(DataMiner):
 
 			# advance video capture position
 			currFrame += grain
-			cap.set(cv2.CV_CAP_PROP_POS_FRAMES, currFrame)
+			cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES, currFrame)
 
 		cap.release()
 		return results, READY
@@ -163,6 +164,9 @@ class FaceClusterer(DataMiner):
 
 		# Get cluster labels from the clustering algorithm
 		labels = clf.labels_
+
+		for lbl in clf.labels_:
+			pass
 
 		return data, READY
 
