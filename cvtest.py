@@ -158,14 +158,14 @@ class FaceClusterer(DataMiner):
 		DataMiner.__init__(self, tmpDir)
 
 		self.n_clusters = n_clusters
-		from sklearn.cluster import AffinityPropagation, KMeans
+		from sklearn.cluster import AffinityPropagation, KMeans, DBSCAN
 
 		if n_clusters is not None:
 			# If a number of clusters was provided, use KMeans clustering
 			self.clf = KMeans(n_clusters=n_clusters, n_jobs=-1)
 		else:
 			# Otherwise, try Affinity Propagation clustering
-			self.clf = AffinityPropagation(damping=0.5, max_iter=300, convergence_iter=200)
+			self.clf = AffinityPropagation(damping=0.99, max_iter=80, convergence_iter=200)
 
 	def build(self, data):
 		""" Receives list of FaceLists holding LBP representations.  Clusters all data by
@@ -340,7 +340,7 @@ if __name__ == '__main__':
 	ff = VideoFaceFinder(tempDir)
 	fv = FaceVectoriser()
 
-	fc = FaceClusterer(tmpDir='./Frontend-Web/faces/', n_clusters=2)
+	fc = FaceClusterer(tmpDir='./Frontend-Web/faces/')#, n_clusters=2)
 	fm = FaceSearchMiner()
 	fs = FaceSearch()
 
@@ -358,7 +358,7 @@ if __name__ == '__main__':
 	# in the chunk data.
 	clusterAssignedChunks, status = fc.build(processedChunks)
 
-	print "Created " + str(clusterAssignedChunks[0]) + " chunks."
+	print "Created " + str(clusterAssignedChunks[0]) + " clusters."
 
 	save_clusters(clusterAssignedChunks)
 	print "clusters saved."
