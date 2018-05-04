@@ -112,11 +112,7 @@ class FaceVectoriser(DataMiner):
 			of FaceLists with LBP converted faces.
 		"""
 
-		output = []
-
 		for chunk in data:
-			newChunk = FaceList(chunk.time)
-
 			# Get all faces from this chunk/frame
 			faces = []
 			for face in chunk.content:
@@ -132,12 +128,11 @@ class FaceVectoriser(DataMiner):
 			LBP_vectors = [x.tolist() for x in LBP_vectors]
 			LBP_vectors = [x[0] for x in LBP_vectors]
 
-			for LBP_vec in LBP_vectors:
-				newChunk.content.append(LBP_vec)
+			# Populate LBP_Vector list in the chunk
+			chunk.LBP_Vectors.extend(LBP_vectors)
 
-			output.append(newChunk)
-		
-		return output, READY
+		# Return updated list of chunks
+		return data, READY
 
 class FaceClusterer(DataMiner):
 
