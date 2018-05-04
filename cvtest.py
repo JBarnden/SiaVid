@@ -1,5 +1,5 @@
 from pipeline import DataMiner, SearchEngine, READY, ERROR
-from skimage import feature
+from sklearn.cluster import AffinityPropagation
 from sets import Set
 import timeit
 
@@ -106,30 +106,63 @@ class VideoFaceFinder(DataMiner):
 class FaceVectoriser(DataMiner):
 
 	def build(self, data):
-		""" Receives list of FaceLists with extracted face images, returns new list 
+		"""
+			Receives list of FaceLists with extracted face images, returns new list
 			of FaceLists with LBP converted faces.
 		"""
 
 		output = []
+
 		for chunk in data:
 			newChunk = FaceList(chunk.time)
+
+			# Get all faces from this chunk/frame
+			faces = []
 			for face in chunk.content:
-				newChunk.content.append(feature.local_binary_pattern(face, 30, 5, method='uniform'))
+				faces.append(face)
+
+			# Set up and train OpenCV's LBPH recognizer
+			# (to get its feature encodings)
+			r = cv2.face.LBPHFaceRecognizer_create()
+			r.train(faces)
+			# Retrieve encoded features
+			LBP_vectors = r.getHistograms()
+			# Format features for sklearn classifier
+			LBP_vectors = [x.tolist() for x in LBP_vectors]
+			LBP_vectors = [x[0] for x in LBP_vectors]
+
+			for LBP_vec in LBP_vectors:
+				newChunk.content.append(LBP_vec)
+
 			output.append(newChunk)
 		
 		return output, READY
 
 class FaceClusterer(DataMiner):
 
+	def __init__(self, damping=0.5, max_iter=300):
+		DataMiner.__init__(self)
+		# Initialize Affinity Propagation clustering algorithm with constructor assigned parameters
+		self.clf = AffinityPropagation(damping=damping, max_iter=max_iter)
+
 	def build(self, data):
 		""" Receives list of FaceLists holding LBP representations.  Trains based on total set
 			and then clusters presented faces using trained model.
 			Returns list consisting of [k, FaceList0, ..., FaceListn]
 		"""
+		clf = self.clf
 
-		# Run through and build clusters
+		# Get all faces from the list of chunks
+		face_data = []
+		for chunk in data:
+			for LBP_vec in chunk.content:
+				face_data.append(LBP_vec)
 
-		# Run through and assign clusters
+		# Cluster the faces
+		clf.fit(face_data)
+
+		# Get cluster labels from the clustering algorithm
+		labels = clf.labels_
 
 		return data, READY
 
