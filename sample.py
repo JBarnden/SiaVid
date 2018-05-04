@@ -34,8 +34,9 @@ def setURL():
     id = url.split("=")[1] # get youtube ID.
 
     for timeline in timelines:
-        print "Saving timeline {}".format(timeline)
-        pl.saveCorpus(timelines[timeline].corpus[-1], id)
+        if timeline not in faceTimelines:
+            print "Saving timeline {}".format(timeline)
+            pl.saveCorpus(timelines[timeline].corpus[-1], id)
 
     url = request.form['uri']
     url = url.encode("ascii")
@@ -126,7 +127,7 @@ def doAcquire(timeline):
 
         result = timeline
 
-        if pl.loadCorpus(timelines[timeline].corpus[-1], id):
+        if timeline not in faceTimelines and pl.loadCorpus(timelines[timeline].corpus[-1], id):
             timelines[timeline].status = READY
         else:
             regenerate(timeline)
