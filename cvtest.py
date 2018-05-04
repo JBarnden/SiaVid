@@ -74,7 +74,7 @@ class VideoFaceFinder(DataMiner):
 
 			# advance video capture position
 			currFrame += grain
-			cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES, currFrame)
+			cap.set(cv2.CV_CAP_PROP_POS_FRAMES, currFrame)
 
 		cap.release()
 		return results, READY
