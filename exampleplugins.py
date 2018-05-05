@@ -86,6 +86,8 @@ class YoutubeAutoVSSAcquirer(Acquirer):
 				'skip_download': True,
 				'quiet': True
 			})
+		else:
+			self.setOptions(options)
 
 	def setOptions(self, opts):
 		self.ydl_opts = opts
@@ -103,17 +105,19 @@ class YoutubeAutoVSSAcquirer(Acquirer):
 		return self.subfilename, READY
 
 class YoutubeMediaAcquirer(Acquirer):
-	def __init__(self, tempDir='./tmp/'):
+	def __init__(self, tempDir='./tmp/', options=None):
 		Acquirer.__init__(self, tempDir)
-		self.setOptions({
-			'writeautomaticsub': True,
-    		'outtmpl': unicode(self.tempDir + '%(id)s.%(ext)s'),
-    		'skip_download': False,
-			'quiet': False
-		})
+		if options == None:
+			self.setOptions({
+				'writeautomaticsub': True,
+    			'outtmpl': unicode(self.tempDir + '%(id)s.%(ext)s'),
+    			'skip_download': False,
+				'quiet': False
+			})
+		else:
+			self.setOptions(options)
 
 	def filenameCatcher(self, event):
-		print "Catcher triggered:", event
 		if event['status'] == 'finished':
 			self.subfilename = event['filename']
 
@@ -141,21 +145,23 @@ class YoutubeAudioAcquirer(Acquirer):
 		(apt-get install libav-tools installs avconv and avprobe
 		on linux)
 	"""
-	def __init__(self, tempDir='./tmp/'):
+	def __init__(self, tempDir='./tmp/', options = None):
 		Acquirer.__init__(self, tempDir)
 		self.downloadPath = ''
-		self.setOptions({
-                'outtmpl': unicode(tempDir + '%(id)s.%(ext)s'),
-                'format': 'bestaudio/best',
-                'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'wav',
-                'preferredquality': '192',
-            }],
-            })
+		if options == None:
+			self.setOptions({
+					'outtmpl': unicode(tempDir + '%(id)s.%(ext)s'),
+					'format': 'bestaudio/best',
+					'postprocessors': [{
+					'key': 'FFmpegExtractAudio',
+					'preferredcodec': 'wav',
+					'preferredquality': '192',
+				}],
+				})
+		else:
+			self.setOptions(options)
 
 	def filenameCatcher(self, event):
-		print "Catcher triggered:", event
 		if event['status'] == 'finished':
 			self.downloadPath = event['filename']
 
