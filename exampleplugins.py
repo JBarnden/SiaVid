@@ -135,6 +135,39 @@ class YoutubeMediaAcquirer(Acquirer):
 		return self.subfilename, READY
 
 
+class YoutubeVideoAcquirer(Acquirer):
+	def __init__(self, tempDir='./tmp/'):
+		Acquirer.__init__(self, tempDir)
+		self.setOptions({
+			'keepvideo': True,
+			'format':'best',
+			'outtmpl': unicode(self.tempDir + '%(id)s.%(ext)s'),
+			'skip_download': False,
+			'quiet': False,
+		})
+
+	def filenameCatcher(self, event):
+		print "Catcher triggered:", event
+		if event['status'] == 'finished':
+			self.videoFileName = event['filename']
+
+	def setOptions(self, opts):
+		opts['progress_hooks'] = [self.filenameCatcher]
+		self.ydl_opts = opts
+
+	def acquire(self, *url):
+		self.videoFileName = ''
+
+		with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
+			ydl.download(url)
+
+		if self.videoFileName == '':
+			print "ERROR"
+			return self.videoFileName, ERROR
+
+		return self.videoFileName, READY
+
+
 class YoutubeAudioAcquirer(Acquirer):
 	"""	
 		Requires ffmpeg and ffprobe, or avprobe and avconv on the host system
