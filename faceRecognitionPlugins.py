@@ -214,6 +214,8 @@ class FaceClusterer(DataMiner):
 
 class FaceSearchMiner(DataMiner):
 	def __init__(self, chunkSize=3, faceFolder='./face/', faceLimit=3):
+		DataMiner.__init__(self)
+
 		self.chunkSize = chunkSize # ultimate length of chunks
 		self.faceFolder = faceFolder # folder for outputting faces
 		self.faceLimit = faceLimit # max number of faces per cluster
@@ -247,7 +249,7 @@ class FaceSearchMiner(DataMiner):
 
 			for cluster in range(0, len(face.clusters)):
 				# get cluster id and face image
-				clusterID = face.clusters[cluster]
+				clusterID = face.cluster[cluster]
 				face = face.content[cluster]
 
 				# add a new cluster indexed by current ID if necessary
