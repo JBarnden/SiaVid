@@ -1,6 +1,6 @@
 from pipeline import DataMiner, SearchEngine, READY, ERROR
-from skimage import feature
 from sets import Set
+import numpy as np
 import timeit
 import random
 
@@ -12,7 +12,8 @@ class FaceList:
 	def __init__(self, time):
 		self.time = time
 		self.content = []
-		self.clusters = []
+		self.cluster = []
+		self.LBP_Vectors = []
 
 class FaceChunk:
 	""" A list of which face cluster IDs appear within a given chunk of time
@@ -45,13 +46,15 @@ class VideoFaceFinder(DataMiner):
 
 	def build(self, data):
 		""" Returns a list of time-indexed FaceLists holding Faces """
+		# Total number of faces found (to print to console)
+		faceCount = 0
 
 		results = []
 		cap = cv2.VideoCapture(data)
 		if not cap.isOpened():
 			return results, ERROR
 
-		fps = cap.get(cv2.cv.CV_CAP_PROP_FPS) # video FPS
+		fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
 
 		grain = fps/self.sampleRate # offset for sampleRate samples per second
 		currFrame = 0 # starting frame
@@ -73,12 +76,16 @@ class VideoFaceFinder(DataMiner):
 			# If any extracted faces, store chunk for returning
 			if len(chunk.content) > 0:
 				results.append(chunk)
+				faceCount += len(chunk.content)
 
 			# advance video capture position
 			currFrame += grain
 			cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES, currFrame)
 
 		cap.release()
+
+		print "VideoFaceFounder found a total of " + str(faceCount) + " faces."
+
 		return results, READY
 
 	def findFaces(self, frame, cascade):
@@ -93,7 +100,7 @@ class VideoFaceFinder(DataMiner):
 			# store crops of faces
 
 			if len(faces) > 0:
-				print "Faces found."
+				print "Found " + str(len(faces)) + " faces."
 			
 			for x, y, w, h in faces:
 				face = grey[y:y+h, x:x+w]
@@ -108,32 +115,99 @@ class VideoFaceFinder(DataMiner):
 class FaceVectoriser(DataMiner):
 
 	def build(self, data):
-		""" Receives list of FaceLists with extracted face images, returns new list 
+		"""
+			Receives list of FaceLists with extracted face images, returns new list
 			of FaceLists with LBP converted faces.
 		"""
-
-		output = []
+		print "Encoding images as LBP vectors"
+		LBPVecCount = 0
+		imageCount = 0
 		for chunk in data:
-			newChunk = FaceList(chunk.time)
+			# Get all faces from this chunk/frame
+			faces = []
 			for face in chunk.content:
-				newChunk.content.append(feature.local_binary_pattern(face, 30, 5, method='uniform'))
-			output.append(newChunk)
-		
-		return output, READY
+				faces.append(face)
+
+			# Set up and train OpenCV's LBPH recognizer
+			# (to get its feature encodings)
+			r = cv2.face.LBPHFaceRecognizer_create()
+			# Train argument requires labels (but they won't be used
+			# and don't matter or affect this process)
+			randLabels = range(0,len(faces))
+			r.train(faces, np.asarray(randLabels))
+			# Retrieve encoded features
+			LBP_vectors = r.getHistograms()
+			# Format features for sklearn classifier
+			LBP_vectors = [x.tolist() for x in LBP_vectors]
+			LBP_vectors = [x[0] for x in LBP_vectors]
+
+			# Populate LBP_Vector list in the chunk
+			chunk.LBP_Vectors.extend(LBP_vectors)
+
+			# Update counts for console output
+			imageCount += len(faces)
+			LBPVecCount += len(LBP_vectors)
+
+		print "Generated " + str(LBPVecCount) + " LBP vectors for " + str(imageCount) + " images."
+		# Return updated list of chunks
+		return data, READY
 
 class FaceClusterer(DataMiner):
 
+	def __init__(self, tmpDir='/tmp/faceoutput/', n_clusters=None):
+		DataMiner.__init__(self, tmpDir)
+
+		self.n_clusters = n_clusters
+		from sklearn.cluster import AffinityPropagation, KMeans, DBSCAN
+
+		if n_clusters is not None:
+			# If a number of clusters was provided, use KMeans clustering
+			self.clf = KMeans(n_clusters=n_clusters, n_jobs=-1)
+		else:
+			# Otherwise, try Affinity Propagation clustering
+			self.clf = AffinityPropagation(damping=0.99, max_iter=80, convergence_iter=200)
+
 	def build(self, data):
-		""" Receives list of FaceLists holding LBP representations.  Trains based on total set
-			and then clusters presented faces using trained model.
+		""" Receives list of FaceLists holding LBP representations.  Clusters all data by
+			passing messages between pairs of samples (LBP vectors) until convergence or
+			max iterations are reached (see report for more detail on Affinity Propagation).
+
 			Returns list consisting of [k, FaceList0, ..., FaceListn]
 		"""
+		if self.n_clusters is None:
+			print "Number of clusters not set, the clustering algorithm will estimate the number of clusters."
+		else:
+			print "Number of clusters set, using k-means clustering with provided value."
 
-		# Run through and build clusters
+		clf = self.clf
 
-		# Run through and assign clusters
+		# Get all faces from the list of chunks, and the number of
+		# elements in each LBP vector list
+		face_data = []
+		for chunk in data:
+			for LBP_vec in chunk.LBP_Vectors:
+				face_data.append(LBP_vec)
 
-		return data, READY
+		# Cluster the faces with Affinity Propagation
+		clf.fit(face_data)
+
+		# Get cluster labels for each LBP vector from the clustering algorithm
+		# (labels are returned corresponding to the order of input data)
+		labels = clf.labels_.tolist()
+		# Get number of clusters
+		numClust = clf.cluster_centers_.shape[0]
+
+		# Assign cluster labels to faces
+		for chunk in data:
+			for face in chunk.content:
+				chunk.cluster.append(labels.pop(0))
+
+		print "All faces assigned to one of " + str(numClust) + " clusters."
+
+		retList = [numClust]
+		retList.extend(data)
+
+		return retList, READY
 
 class FaceSearchMiner(DataMiner):
 	def __init__(self, chunkSize=3, faceFolder='./face/', faceLimit=3):
@@ -178,13 +252,17 @@ class FaceSearchMiner(DataMiner):
 
 		# Pick n < faceLimit faces to represent this cluster in the frontend
 
+		clusterCounts = []
 		for clusterID in range(0, len(faceExamples)):
 			
 			if len(faceExamples[clusterID]) > faceLimit:
 				faceExamples[clusterID] = random.sample(faceExamples[clusterID], faceLimit)
+
+			count = len(faceExamples[clusterID])
+			clusterCounts.append(count)
 			
 			# save face images for this cluster
-			for faceID in range(0, len(faceExamples[clusterID])):
+			for faceID in range(0, count):
 				face = faceExamples[clusterID][faceID]
 				filename = self.faceFolder + str(clusterID) + "_" + str(faceID)
 				imwrite(filename, face)
@@ -208,46 +286,146 @@ class FaceSearch(SearchEngine):
 		
 		return results
 
-if __name__ == '__main__':
-	tempDir = './tmp/faceoutput/'
-	ff = VideoFaceFinder(tempDir)
-	fv = FaceVectoriser()
 
-	fc = FaceClusterer('./Frontend-Web/faces/')
-	fm = FaceSearchMiner()
-	fs = FaceSearch()
+# Test functions
+def save_images(faceLists):
+	"""
+	Saves images of extracted faces to the current directory.
+
+
+	:param faceLists: a list of FaceList objects
+	:return: List of file names
+	"""
+	fnames = []
+	for c in chunks:
+		faceInd = 0
+		for face in c.content:
+			fname = "frame_" + str(chunks.index(c)) + "_face_" + str(faceInd) + ".png"
+			fnames.append(fname)
+			cv2.imwrite(fname, face)
+			faceInd += 1
+	return fnames
+
+def save_clusters(clusterChunks, baseDir="./clusters/"):
+	"""
+		Save images belonging to each cluster in a folder representing said cluster.
+
+	:param clusterChunks: output from FaceCluster
+	:param baseDir: Base directory in which to save cluster directories
+	:return:
+	"""
+	numClusters = clusterChunks.pop(0)
+	clusterDirs = {}
+
+	# Make base directory
+	if not os.path.exists(baseDir):
+		os.makedirs(baseDir)
+
+	# Make a directory for each cluster
+	for c in range(0, numClusters):
+		clusterDir = baseDir + 'Cluster '+str(c)+'/'
+		clusterDirs[c] = clusterDir
+		if not os.path.exists(clusterDir):
+			os.makedirs(clusterDir)
+		else:
+			# Delete content if it exists
+			for f in os.listdir(clusterDir):
+				path = os.path.join(clusterDir, f)
+				try:
+					if os.path.isfile(path):
+						os.unlink(path)
+				except Exception as e:
+					print e
+
+	# Save cluster images
+	image_paths = save_images(clusterChunks)
+	clusters = []
+
+	for chunk in clusterChunks:
+		for clusterLabel in chunk.cluster:
+			clusters.append(clusterLabel)
+
+	# Move images to appropriate cluster dirs
+	for i in range(0, len(image_paths)):
+		clusterDir = clusterDirs[clusters[i]]
+		try:
+			os.rename(image_paths[i], clusterDir+image_paths[i])
+		except Exception as e:
+			print "We have an issue:"
+			print e
+			print "Moving on..."
+
+
+if __name__ == '__main__':
+	tempDir = '/tmp/faceoutput/'
+	testVidPath = '/testdata/Richard-Ayoade-Krishnan-Guru-Murthy.mp4'
 
 	if not os.path.isdir(tempDir):
 		os.makedirs(tempDir)
 
+	ff = VideoFaceFinder(tempDir)
+	fv = FaceVectoriser()
+	fc = FaceClusterer(tempDir)
+	fm = FaceSearchMiner()
+	fs = FaceSearch()
+
+	# Find faces
 	chunks, status = ff.build('./tmp/wGkvyN6s9cY.mp4')
-	print len(chunks), chunks[0]
+	print "Face Finder produced " + str(len(chunks)) + " chunks."
+
+	#save_images(chunks)
+
+	# Convert face images to LBP feature vectors
 	processedChunks, status = fv.build(chunks)
 	print len(processedChunks), processedChunks[0]
 
-	#for i in range(0, len(chunks)):
-		
-	#	for j in range(0, len(chunks[i].content)):
-	#		print("Outputting face " + str(j) + ", time: " + str(chunks[i].time))
-	#		cv2.imwrite(tempDir + str(chunks[i].time) + "_" + str(j) + '.png', chunks[i].content[j])
-	#		cv2.imwrite(tempDir + str(chunks[i].time) + "_p" + str(j) + '.png', processedChunks[i].content[j])
+	# Get list of chunks where cluster list is populated with cluster ids for each face
+	# in the chunk data.
+	clusterAssignedChunks, status = fc.build(processedChunks)
 
-	#input = [2, FaceList(49.0), FaceList(50.0), FaceList(50.0), FaceList(54.0), FaceList(71.0)]
-	#input[1].cluster = 0
-	#input[2].cluster = 0
-	#nput[3].cluster = 1
-	#input[4].cluster = 0
-	#input[5].cluster = 1
+	print "Created " + str(clusterAssignedChunks[0]) + " clusters."
 
-	#corpus, status = fm.build(input)
+	save_clusters(clusterAssignedChunks)
+	print "clusters saved."
 
-	#result = fs.performSearch(corpus, ["1", "3"])
-
-	#print result
-	#for chunk in result:
-	#	print chunk.startTime, chunk.endTime
-
-	#ff.build('./tmp/wGkvyN6s9cY.mp4')
-	#print timeit.timeit("ff.build('./tmp/wGkvyN6s9cY.mp4')", setup="from __main__ import FaceFinder; ff = FaceFinder('./tmp/faceoutput/')",number=1)
-	
+	# ff = VideoFaceFinder(tempDir)
+	# fv = FaceVectoriser()
+    #
+	# fc = FaceClusterer('./Frontend-Web/faces/')
+	# fm = FaceSearchMiner()
+	# fs = FaceSearch()
+    #
+	# if not os.path.isdir(tempDir):
+	# 	os.makedirs(tempDir)
+    #
+	# #chunks, status = ff.build('./tmp/wGkvyN6s9cY.mp4')
+	# #print len(chunks), chunks[0]
+	# #processedChunks, status = fv.build(chunks)
+	# #print len(processedChunks), processedChunks[0]
+    #
+	# #for i in range(0, len(chunks)):
+	#
+	# #	for j in range(0, len(chunks[i].content)):
+	# #		print("Outputting face " + str(j) + ", time: " + str(chunks[i].time))
+	# #		cv2.imwrite(tempDir + str(chunks[i].time) + "_" + str(j) + '.png', chunks[i].content[j])
+	# #		cv2.imwrite(tempDir + str(chunks[i].time) + "_p" + str(j) + '.png', processedChunks[i].content[j])
+    #
+	# input = [2, FaceList(49.0), FaceList(50.0), FaceList(50.0), FaceList(54.0), FaceList(71.0)]
+	# input[1].cluster = 0
+	# input[2].cluster = 0
+	# input[3].cluster = 1
+	# input[4].cluster = 0
+	# input[5].cluster = 1
+    #
+	# corpus, status = fm.build(input)
+    #
+	# result = fs.performSearch(corpus, ["1", "3"])
+    #
+	# print result
+	# for chunk in result:
+	# 	print chunk.startTime, chunk.endTime
+    #
+	# #ff.build('./tmp/wGkvyN6s9cY.mp4')
+	# #print timeit.timeit("ff.build('./tmp/wGkvyN6s9cY.mp4')", setup="from __main__ import FaceFinder; ff = FaceFinder('./tmp/faceoutput/')",number=1)
+	#
 	
