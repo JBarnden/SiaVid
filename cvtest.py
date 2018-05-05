@@ -374,12 +374,9 @@ def save_clusters(clusterChunks, baseDir="./clusters/"):
 
 
 if __name__ == '__main__':
-	tempDir = '/tmp/faceoutput/'
-	#testVidPath = './testdata/wouldILieToYouClip.mp4'
-	testVidPath = './testdata/Richard-Ayoade-Krishnan-Guru-Murthy.mp4'
+	from exampleplugins import YoutubeVideoAcquirer
 
-	if not os.path.isdir(tempDir):
-		os.makedirs(tempDir)
+	tempDir = '/tmp/faceoutput/'
 
 	ff = VideoFaceFinder(tempDir)
 	fv = FaceVectoriser()
@@ -388,27 +385,78 @@ if __name__ == '__main__':
 	fm = FaceSearchMiner()
 	fs = FaceSearch()
 
-	# Find faces
-	chunks, status = ff.build(testVidPath)
-	print "Face Finder produced " + str(len(chunks)) + " chunks."
 
-	#save_images(chunks)
+	while True:
+		opt = raw_input(
+			"Tests:\n"
+			"1  Test Face Recognition on local file\n"
+			"2  Test with video URL\n"
+			"3  Exit\n\n"
+			"Selection: "
+		)
 
-	# Convert face images to LBP feature vectors
-	processedChunks, status = fv.build(chunks)
-	print len(processedChunks), processedChunks[0]
+		if opt == str(1):
+			#testVidPath = './testdata/wouldILieToYouClip.mp4'
+			testVidPath = './testdata/Richard-Ayoade-Krishnan-Guru-Murthy.mp4'
 
-	# Get list of chunks where cluster list is populated with cluster ids for each face
-	# in the chunk data.
-	clusterAssignedChunks, status = fc.build(processedChunks)
+			if not os.path.isdir(tempDir):
+				os.makedirs(tempDir)
 
-	print "Created " + str(clusterAssignedChunks[0]) + " clusters."
+			# Find faces
+			chunks, status = ff.build(testVidPath)
+			print "Face Finder produced " + str(len(chunks)) + " chunks."
 
-	# Save a copy of FaceCluster output
-	#import pickle
-	#pickle.dump(clusterAssignedChunks, open("./testdata/FaceClusterer_output.p", "wb"))
+			# Convert face images to LBP feature vectors
+			processedChunks, status = fv.build(chunks)
+			print len(processedChunks), processedChunks[0]
 
-	save_clusters(clusterAssignedChunks)
-	print "clusters saved."
+			# Get list of chunks where cluster list is populated with cluster ids for each face
+			# in the chunk data.
+			clusterAssignedChunks, status = fc.build(processedChunks)
 
-	exit(0)
+			print "Created " + str(clusterAssignedChunks[0]) + " clusters."
+
+			# Save a copy of FaceCluster output
+			#import pickle
+			#pickle.dump(clusterAssignedChunks, open("./testdata/FaceClusterer_output.p", "wb"))
+
+			save_clusters(clusterAssignedChunks)
+			print "clusters saved."
+		if opt == str(2):
+			ydl = YoutubeVideoAcquirer()
+			# # Query user for video url
+			url = raw_input('Video url for Face Recognition:\n')
+			url = url.strip(' ')
+
+			# Download video and acquire path
+			testVidPath = ydl.acquire(url)
+			testVidPath = testVidPath[0]
+			if not os.path.isdir(tempDir):
+				os.makedirs(tempDir)
+
+			# Find faces
+			chunks, status = ff.build(testVidPath)
+			print "Face Finder produced " + str(len(chunks)) + " chunks."
+
+			# Convert face images to LBP feature vectors
+			processedChunks, status = fv.build(chunks)
+			print len(processedChunks), processedChunks[0]
+
+			# Get list of chunks where cluster list is populated with cluster ids for each face
+			# in the chunk data.
+			clusterAssignedChunks, status = fc.build(processedChunks)
+
+			print "Created " + str(clusterAssignedChunks[0]) + " clusters."
+
+			# Save a copy of FaceCluster output
+			#import pickle
+			#pickle.dump(clusterAssignedChunks, open("./testdata/FaceClusterer_output.p", "wb"))
+
+			save_clusters(clusterAssignedChunks)
+			print "clusters saved."
+		elif opt == str(3):
+			exit(0)
+
+
+
+

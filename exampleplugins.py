@@ -139,7 +139,7 @@ class YoutubeVideoAcquirer(Acquirer):
 		Acquirer.__init__(self, tempDir)
 		self.setOptions({
 			'keepvideo': True,
-			'format':'best[height<=480]',
+			'format':'best',
 			'outtmpl': unicode(self.tempDir + '%(id)s.%(ext)s'),
 			'skip_download': False,
 			'quiet': False,
