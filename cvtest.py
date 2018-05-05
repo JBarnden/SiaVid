@@ -2,6 +2,7 @@ from pipeline import DataMiner, SearchEngine, READY, ERROR
 from sets import Set
 import numpy as np
 import timeit
+import random
 
 import cv2, os
 
@@ -16,8 +17,9 @@ class FaceList:
 		self.LBP_Vectors = []
 
 class FaceChunk:
-	""" A list of which faces appear within a given chunk of time
+	""" A list of which face cluster IDs appear within a given chunk of time
 	"""
+
 	def __init__(self):
 		self.__init__(None, None, None)
 
@@ -53,8 +55,8 @@ class VideoFaceFinder(DataMiner):
 		if not cap.isOpened():
 			return results, ERROR
 
-		#fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
 		fps = cap.get(cv2.CAP_PROP_FPS) # video FPS
+
 
 		grain = fps/self.sampleRate # offset for sampleRate samples per second
 		currFrame = 0 # starting frame
@@ -217,20 +219,27 @@ class FaceClusterer(DataMiner):
 		return retList, READY
 
 class FaceSearchMiner(DataMiner):
-	def __init__(self, chunkSize=3, faceFolder='./face/'):
+	def __init__(self, chunkSize=3, faceFolder='./face/', faceLimit=3):
 		self.chunkSize = chunkSize # ultimate length of chunks
 		self.faceFolder = faceFolder # folder for outputting faces
+		self.faceLimit = faceLimit # max number of faces per cluster
 		if not os.path.isdir(faceFolder):
 			os.makedirs(faceFolder)
 
 	def build(self, data):
 		""" Receives list of [clusterCount, FaceList0, ..., FaceListn]
-			Selects one image representing each cluster and outputs it to faceFolder/[index].png
-			Returns reverse-indexed dict of Clusters by clusterID, containing FaceChunks with
-			startTime and endTime.
+			Selects up to faceLimit images representing each cluster and outputs it to
+			faceFolder/[index].png
+			Returns two-item list: [[], {}]
+				- List of cluster counts ([3, 2, 1] indicates cluster 0 has 1 image, cluster
+				1 has 2 and cluster 3 has 1) - this is read from the corpus to let the
+				frontend know how many images it should expect in faceFolder.
+				- reverse-indexed dict of Clusters by clusterID, containing FaceChunks with
+				startTime and endTime.
 		"""
 		
 		clusters = {}
+		faceExamples = {}
 
 		# sliding window for current chunk
 		start = 0
@@ -242,27 +251,54 @@ class FaceSearchMiner(DataMiner):
 				start = end
 				end += self.chunkSize
 
-			# add a new cluster indexed by current ID if necessary
-			if face.cluster not in clusters:
-				clusters[face.cluster] = []
+			for cluster in range(0, len(face.clusters)):
+				# get cluster id and face image
+				clusterID = face.clusters[cluster]
+				face = face.content[cluster]
 
-			clusters[face.cluster].append(FaceChunk(start, end))
+				# add a new cluster indexed by current ID if necessary
+				if face.clusters[cluster] not in clusters:
+					clusters[cluster] = []
+					faceExamples[cluster] = []
 
-		return clusters, READY
+				clusters[clusterID].append(FaceChunk(start, end))
+				faceExamples[clusterID].append(face)
+
+		# Pick n < faceLimit faces to represent this cluster in the frontend
+
+		clusterCounts = []
+		for clusterID in range(0, len(faceExamples)):
+			
+			if len(faceExamples[clusterID]) > self.faceLimit:
+				faceExamples[clusterID] = random.sample(faceExamples[clusterID], self.faceLimit)
+
+			count = len(faceExamples[clusterID])
+			clusterCounts.append(count)
+			
+			# save face images for this cluster
+			for faceID in range(0, count):
+				face = faceExamples[clusterID][faceID]
+				filename = self.faceFolder + str(clusterID) + "_" + str(faceID)
+				cv2.imwrite(filename, face)
+
+		return [clusterCounts, clusters], READY
 
 class FaceSearch(SearchEngine):
 	def performSearch(self, corpus, terms):
 		""" Return a set of start and end times encompassing the union of
 			all classes referred to in terms.
+			Expects a two-element list as output from FaceSearchMiner:
+			[[clusterCounts], {searchcorpus}]
+			Returns a list of FaceChunks for the clusters requested.
 		"""
 
 		results = Set() # only want unique results
 		
 		for term in terms:
 			term = int(term)
-			if term not in corpus:
+			if term not in corpus[1]:
 				continue
-			for result in corpus[term]:
+			for result in corpus[1][term]:
 				results.add(result)
 		
 		return results
@@ -339,7 +375,7 @@ def save_clusters(clusterChunks, baseDir="./clusters/"):
 
 if __name__ == '__main__':
 	tempDir = '/tmp/faceoutput/'
-	testVidPath = './testdata/wouldILieToYouClip.mp4'
+	#testVidPath = './testdata/wouldILieToYouClip.mp4'
 	testVidPath = './testdata/Richard-Ayoade-Krishnan-Guru-Murthy.mp4'
 
 	if not os.path.isdir(tempDir):
@@ -376,4 +412,3 @@ if __name__ == '__main__':
 	print "clusters saved."
 
 	exit(0)
-	
