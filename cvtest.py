@@ -2,6 +2,7 @@ from pipeline import DataMiner, SearchEngine, READY, ERROR
 from skimage import feature
 from sets import Set
 import timeit
+import random
 
 import cv2, os
 
@@ -11,11 +12,12 @@ class FaceList:
 	def __init__(self, time):
 		self.time = time
 		self.content = []
-		self.cluster = None
+		self.clusters = []
 
 class FaceChunk:
-	""" A list of which faces appear within a given chunk of time
+	""" A list of which face cluster IDs appear within a given chunk of time
 	"""
+
 	def __init__(self):
 		self.__init__(None, None, None)
 
@@ -134,9 +136,10 @@ class FaceClusterer(DataMiner):
 		return data, READY
 
 class FaceSearchMiner(DataMiner):
-	def __init__(self, chunkSize=3, faceFolder='./face/'):
+	def __init__(self, chunkSize=3, faceFolder='./face/', faceLimit=3):
 		self.chunkSize = chunkSize # ultimate length of chunks
 		self.faceFolder = faceFolder # folder for outputting faces
+		self.faceLimit = faceLimit # max number of faces per cluster
 		if not os.path.isdir(faceFolder):
 			os.makedirs(faceFolder)
 
@@ -148,6 +151,7 @@ class FaceSearchMiner(DataMiner):
 		"""
 		
 		clusters = {}
+		faceExamples = {}
 
 		# sliding window for current chunk
 		start = 0
@@ -159,11 +163,31 @@ class FaceSearchMiner(DataMiner):
 				start = end
 				end += self.chunkSize
 
-			# add a new cluster indexed by current ID if necessary
-			if face.cluster not in clusters:
-				clusters[face.cluster] = []
+			for cluster in range(0, len(face.clusters)):
+				# get cluster id and face image
+				clusterID = face.clusters[cluster]
+				face = face.content[cluster]
 
-			clusters[face.cluster].append(FaceChunk(start, end))
+				# add a new cluster indexed by current ID if necessary
+				if face.clusters[cluster] not in clusters:
+					clusters[cluster] = []
+					faceExamples[cluster] = []
+
+				clusters[clusterID].append(FaceChunk(start, end))
+				faceExamples[clusterID].append(face)
+
+		# Pick n < faceLimit faces to represent this cluster in the frontend
+
+		for clusterID in range(0, len(faceExamples)):
+			
+			if len(faceExamples[clusterID]) > faceLimit:
+				faceExamples[clusterID] = random.sample(faceExamples[clusterID], faceLimit)
+			
+			# save face images for this cluster
+			for faceID in range(0, len(faceExamples[clusterID])):
+				face = faceExamples[clusterID][faceID]
+				filename = self.faceFolder + str(clusterID) + "_" + str(faceID)
+				imwrite(filename, face)
 
 		return clusters, READY
 
@@ -196,10 +220,10 @@ if __name__ == '__main__':
 	if not os.path.isdir(tempDir):
 		os.makedirs(tempDir)
 
-	#chunks, status = ff.build('./tmp/wGkvyN6s9cY.mp4')
-	#print len(chunks), chunks[0]
-	#processedChunks, status = fv.build(chunks)
-	#print len(processedChunks), processedChunks[0]
+	chunks, status = ff.build('./tmp/wGkvyN6s9cY.mp4')
+	print len(chunks), chunks[0]
+	processedChunks, status = fv.build(chunks)
+	print len(processedChunks), processedChunks[0]
 
 	#for i in range(0, len(chunks)):
 		
@@ -208,20 +232,20 @@ if __name__ == '__main__':
 	#		cv2.imwrite(tempDir + str(chunks[i].time) + "_" + str(j) + '.png', chunks[i].content[j])
 	#		cv2.imwrite(tempDir + str(chunks[i].time) + "_p" + str(j) + '.png', processedChunks[i].content[j])
 
-	input = [2, FaceList(49.0), FaceList(50.0), FaceList(50.0), FaceList(54.0), FaceList(71.0)]
-	input[1].cluster = 0
-	input[2].cluster = 0
-	input[3].cluster = 1
-	input[4].cluster = 0
-	input[5].cluster = 1
+	#input = [2, FaceList(49.0), FaceList(50.0), FaceList(50.0), FaceList(54.0), FaceList(71.0)]
+	#input[1].cluster = 0
+	#input[2].cluster = 0
+	#nput[3].cluster = 1
+	#input[4].cluster = 0
+	#input[5].cluster = 1
 
-	corpus, status = fm.build(input)
+	#corpus, status = fm.build(input)
 
-	result = fs.performSearch(corpus, ["1", "3"])
+	#result = fs.performSearch(corpus, ["1", "3"])
 
-	print result
-	for chunk in result:
-		print chunk.startTime, chunk.endTime
+	#print result
+	#for chunk in result:
+	#	print chunk.startTime, chunk.endTime
 
 	#ff.build('./tmp/wGkvyN6s9cY.mp4')
 	#print timeit.timeit("ff.build('./tmp/wGkvyN6s9cY.mp4')", setup="from __main__ import FaceFinder; ff = FaceFinder('./tmp/faceoutput/')",number=1)
