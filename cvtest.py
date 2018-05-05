@@ -47,6 +47,7 @@ class VideoFaceFinder(DataMiner):
 
 	def build(self, data):
 		""" Returns a list of time-indexed FaceLists holding Faces """
+		print "FaceFinder started..."
 		# Total number of faces found (to print to console)
 		faceCount = 0
 
@@ -57,13 +58,10 @@ class VideoFaceFinder(DataMiner):
 
 		fps = cap.get(cv2.CAP_PROP_FPS) # video FPS
 
-
 		grain = fps/self.sampleRate # offset for sampleRate samples per second
 		currFrame = 0 # starting frame
 
 		while(cap.isOpened()): # loop through video in steps of size 'grain'
-			print("Processing frame " + str(currFrame))
-
 			ret, frame = cap.read()
 
 			if ret == False: # have we run out of video?
@@ -86,7 +84,7 @@ class VideoFaceFinder(DataMiner):
 
 		cap.release()
 
-		print "VideoFaceFounder found a total of " + str(faceCount) + " faces."
+		print "VideoFaceFinder found a total of " + str(faceCount) + " faces."
 
 		return results, READY
 
@@ -100,10 +98,6 @@ class VideoFaceFinder(DataMiner):
 			faces = cascade.detectMultiScale(grey, scaleFactor=1.1, minSize=(80,80), minNeighbors=5)
 
 			# store crops of faces
-
-			if len(faces) > 0:
-				print "Found " + str(len(faces)) + " faces."
-			
 			for x, y, w, h in faces:
 				face = grey[y:y+h, x:x+w]
 				face = cv2.resize(face, self.outputSize, interpolation = cv2.INTER_CUBIC)
