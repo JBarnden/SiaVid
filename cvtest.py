@@ -122,6 +122,7 @@ class FaceVectoriser(DataMiner):
 		print "Encoding images as LBP vectors"
 		LBPVecCount = 0
 		imageCount = 0
+
 		for chunk in data:
 			# Get all faces from this chunk/frame
 			faces = []
@@ -168,9 +169,15 @@ class FaceClusterer(DataMiner):
 			self.clf = AffinityPropagation(damping=0.99, max_iter=80, convergence_iter=200)
 
 	def build(self, data):
-		""" Receives list of FaceLists holding LBP representations.  Clusters all data by
-			passing messages between pairs of samples (LBP vectors) until convergence or
-			max iterations are reached (see report for more detail on Affinity Propagation).
+		""" Receives list of FaceLists holding LBP representations.  If no value for k is set,
+			Samples are clustered by passing messages between pairs of samples (LBP vectors)
+			until convergence or max iterations are reached (see report for more detail on Affinity Propagation).
+
+			If number of clusters is set, KMeans clustering is used with the provided value, iteratively fitting
+			the centroids to better fit their neighbourhoods.  In an attempt to avoid convergence to
+			local minima, this implementation of k-means uses K-means++ initialization, which ensures a sufficient
+			distance between centroids.  This has proven to provide better results than when randomly positioning
+			centroids at initialization.
 
 			Returns list consisting of [k, FaceList0, ..., FaceListn]
 		"""
@@ -332,7 +339,8 @@ def save_clusters(clusterChunks, baseDir="./clusters/"):
 
 if __name__ == '__main__':
 	tempDir = '/tmp/faceoutput/'
-	testVidPath = '/testdata/Richard-Ayoade-Krishnan-Guru-Murthy.mp4'
+	testVidPath = './testdata/wouldILieToYouClip.mp4'
+	testVidPath = './testdata/Richard-Ayoade-Krishnan-Guru-Murthy.mp4'
 
 	if not os.path.isdir(tempDir):
 		os.makedirs(tempDir)
@@ -340,12 +348,12 @@ if __name__ == '__main__':
 	ff = VideoFaceFinder(tempDir)
 	fv = FaceVectoriser()
 
-	fc = FaceClusterer(tmpDir='./Frontend-Web/faces/')#, n_clusters=2)
+	fc = FaceClusterer(tmpDir='./Frontend-Web/faces/')#, n_clusters=7)
 	fm = FaceSearchMiner()
 	fs = FaceSearch()
 
 	# Find faces
-	chunks, status = ff.build('testdata/Richard-Ayoade-Krishnan-Guru-Murthy.mp4')
+	chunks, status = ff.build(testVidPath)
 	print "Face Finder produced " + str(len(chunks)) + " chunks."
 
 	#save_images(chunks)
@@ -360,47 +368,12 @@ if __name__ == '__main__':
 
 	print "Created " + str(clusterAssignedChunks[0]) + " clusters."
 
+	# Save a copy of FaceCluster output
+	#import pickle
+	#pickle.dump(clusterAssignedChunks, open("./testdata/FaceClusterer_output.p", "wb"))
+
 	save_clusters(clusterAssignedChunks)
 	print "clusters saved."
 
-	# ff = VideoFaceFinder(tempDir)
-	# fv = FaceVectoriser()
-    #
-	# fc = FaceClusterer('./Frontend-Web/faces/')
-	# fm = FaceSearchMiner()
-	# fs = FaceSearch()
-    #
-	# if not os.path.isdir(tempDir):
-	# 	os.makedirs(tempDir)
-    #
-	# #chunks, status = ff.build('./tmp/wGkvyN6s9cY.mp4')
-	# #print len(chunks), chunks[0]
-	# #processedChunks, status = fv.build(chunks)
-	# #print len(processedChunks), processedChunks[0]
-    #
-	# #for i in range(0, len(chunks)):
-	#
-	# #	for j in range(0, len(chunks[i].content)):
-	# #		print("Outputting face " + str(j) + ", time: " + str(chunks[i].time))
-	# #		cv2.imwrite(tempDir + str(chunks[i].time) + "_" + str(j) + '.png', chunks[i].content[j])
-	# #		cv2.imwrite(tempDir + str(chunks[i].time) + "_p" + str(j) + '.png', processedChunks[i].content[j])
-    #
-	# input = [2, FaceList(49.0), FaceList(50.0), FaceList(50.0), FaceList(54.0), FaceList(71.0)]
-	# input[1].cluster = 0
-	# input[2].cluster = 0
-	# input[3].cluster = 1
-	# input[4].cluster = 0
-	# input[5].cluster = 1
-    #
-	# corpus, status = fm.build(input)
-    #
-	# result = fs.performSearch(corpus, ["1", "3"])
-    #
-	# print result
-	# for chunk in result:
-	# 	print chunk.startTime, chunk.endTime
-    #
-	# #ff.build('./tmp/wGkvyN6s9cY.mp4')
-	# #print timeit.timeit("ff.build('./tmp/wGkvyN6s9cY.mp4')", setup="from __main__ import FaceFinder; ff = FaceFinder('./tmp/faceoutput/')",number=1)
-	#
+	exit(0)
 	
