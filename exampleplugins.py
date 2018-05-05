@@ -77,14 +77,15 @@ class PassThroughAcquirer(Acquirer):
 import youtube_dl, os
 
 class YoutubeAutoVSSAcquirer(Acquirer):
-	def __init__(self, tempDir='./tmp/'):
+	def __init__(self, tempDir='./tmp/', options = None):
 		Acquirer.__init__(self, tempDir)
-		self.setOptions({
-			'writeautomaticsub': True,
-    		'outtmpl': unicode(self.tempDir + '%(id)s.%(ext)s'),
-    		'skip_download': True,
-			'quiet': True
-		})
+		if options == None: # Set default options
+			self.setOptions({
+				'writeautomaticsub': True,
+				'outtmpl': unicode(self.tempDir + '%(id)s.%(ext)s'),
+				'skip_download': True,
+				'quiet': True
+			})
 
 	def setOptions(self, opts):
 		self.ydl_opts = opts
