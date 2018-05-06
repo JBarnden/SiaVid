@@ -167,8 +167,8 @@ def regenerate(timeline):
 def getFaces(timeline):
     faces = []
     if timeline in timelines:
-        corpus = pl#.getCorpus(timelines[timeline].corpus[-1])
-        faces = [3, 1, 2]#corpus[0]
+        corpus = pl.getCorpus(timelines[timeline].corpus[-1])
+        faces = corpus[0]
 
     resp = make_response(json.dumps(faces))
     resp.headers['Access-Control-Allow-Origin'] = '*'
