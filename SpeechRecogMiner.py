@@ -393,7 +393,8 @@ class SpeechRecogMiner(DataMiner):
             
             # Populate and return an SRTChunk object
             chunk = SRTChunk()
-            chunk.content = hypothesis
+            if len(hypothesis) > 0:
+                chunk.content = [hypothesis]
             chunk.startTime = startTime.seconds
             chunk.endTime = endTime.seconds
         except Exception as e:
