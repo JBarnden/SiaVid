@@ -365,7 +365,7 @@ class Pipeline:
 			filename = vidDir + corpusTag
 
 			if not os.path.isdir(vidDir):
-				os.mkdir(vidDir)
+				os.makedirs(vidDir)
 
 			with open(filename, "w") as file:
 				pickle.dump(self.corpus[corpusTag], file)
@@ -526,7 +526,7 @@ class Pipeline:
 		logger.info("{} done".format(timeline.prettyName))
 		timeline.status = READY
 
-	def getCorpus(tag):
+	def getCorpus(self, tag):
 		""" Returns a reference to a given corpus, given its minerTag
 		"""
 
