@@ -526,7 +526,7 @@ class Pipeline:
 		logger.info("{} done".format(timeline.prettyName))
 		timeline.status = READY
 
-	def getCorpus(tag):
+	def getCorpus(self, tag):
 		""" Returns a reference to a given corpus, given its minerTag
 		"""
 

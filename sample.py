@@ -193,7 +193,7 @@ if __name__ == "__main__":
     pl.addMiner(VideoFaceFinder(), 'faceFinder') # Finds faces in the frames of a video and outputs them.
     pl.addMiner(FaceVectoriser(), 'faceVec') # Encodes images of faces as LBP vectors.
     pl.addMiner(FaceClusterer(n_clusters=None), 'faceClust') # Assigns faces/face vectors to clusters
-    pl.addMiner(FaceSearchMiner(), 'faceSearchMine') # Formats the output from the FaceClusterer to be searchable
+    pl.addMiner(FaceSearchMiner(faceFolder='./Frontend-Web/faces/'), 'faceSearchMine') # Formats the output from the FaceClusterer to be searchable
     pl.addMiner(TrieMiner(), 'trieminer') # Processes list of SRTChunks into a trie
     pl.addMiner(TrieMiner(), 'trieminer2') # Processes list of SRTChunks into a trie
     pl.addMiner(TrieMiner(), 'trieminer3') # Processes list of SRTChunks into a trie

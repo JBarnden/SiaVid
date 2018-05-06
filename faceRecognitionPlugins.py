@@ -241,21 +241,22 @@ class FaceSearchMiner(DataMiner):
 		start = 0
 		end = self.chunkSize
 
-		for face in data[1:]:
+		for frame in data[1:]:
+
 			# Do we need to move window along?
-			while end < face.time:				
+			while end < frame.time:				
 				start = end
 				end += self.chunkSize
 
-			for cluster in range(0, len(face.clusters)):
+			for cluster in range(0, len(frame.cluster)):
 				# get cluster id and face image
-				clusterID = face.cluster[cluster]
-				face = face.content[cluster]
+				clusterID = frame.cluster[cluster]
+				face = frame.content[cluster]
 
 				# add a new cluster indexed by current ID if necessary
-				if face.clusters[cluster] not in clusters:
-					clusters[cluster] = []
-					faceExamples[cluster] = []
+				if clusterID not in clusters:
+					clusters[clusterID] = []
+					faceExamples[clusterID] = []
 
 				clusters[clusterID].append(FaceChunk(start, end))
 				faceExamples[clusterID].append(face)
@@ -274,7 +275,7 @@ class FaceSearchMiner(DataMiner):
 			# save face images for this cluster
 			for faceID in range(0, count):
 				face = faceExamples[clusterID][faceID]
-				filename = self.faceFolder + str(clusterID) + "_" + str(faceID)
+				filename = self.faceFolder + str(clusterID) + "_" + str(faceID) + ".png"
 				cv2.imwrite(filename, face)
 
 		return [clusterCounts, clusters], READY
