@@ -365,7 +365,7 @@ class Pipeline:
 			filename = vidDir + corpusTag
 
 			if not os.path.isdir(vidDir):
-				os.mkdir(vidDir)
+				os.makedirs(vidDir)
 
 			with open(filename, "w") as file:
 				pickle.dump(self.corpus[corpusTag], file)
