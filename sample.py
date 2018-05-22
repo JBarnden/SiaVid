@@ -1,3 +1,21 @@
+"""
+    SiaVid - A pluggable, customisable framework for indexing and searching data retrieved and generated from video.
+    Copyright (C) 2018  Gareth Morgan, James Barnden, Antonios Plessas
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
 import json, sys
 import os
 from threading import Thread
@@ -35,8 +53,7 @@ def setURL():
 
     global url
 
-    id = url.split("v=")[1].split("&")[0] # get youtube ID.
-    print id
+    id = url.split("=")[1] # get youtube ID.
 
     for timeline in timelines:
         if timeline not in faceTimelines:
@@ -54,9 +71,6 @@ def setURL():
 
 @app.route("/getTimelines/")
 def getSearch():
-    """ Returns a list of timelines available in this app.
-    """
-
     result = []
     timelineList = {}
 
@@ -100,8 +114,6 @@ def doSearch(timeline):
             search = timelines[timeline].search
             corpus = timelines[timeline].corpus[-1]
 
-            # SearchEngines take search terms as a list of strings
-
             terms = request.form['searchterms'] # TODO: Sanitising of search terms
             terms = terms.encode("ascii").lower()
             terms = terms.strip()
@@ -133,8 +145,7 @@ def doAcquire(timeline):
 
     if timeline in timelines:
         global url
-
-        id = url.split("v=")[1].split("&")[0] # get youtube ID.
+        id = url.split("=")[1]
 
         result = timeline
 
@@ -169,13 +180,10 @@ def regenerate(timeline):
     t = Thread(target=pl.generateTimeline, name = timeline, args=(timelines[timeline], url))
     t.start()
 
+# Special-cased route for acquiring face information
 @app.route("/getfaces/<timeline>", methods=['GET'])
 def getFaces(timeline):
-    """ Special-cased route for acquiring face information from corpus
-    """
-
     faces = []
-
     if timeline in timelines:
         corpus = pl.getCorpus(timelines[timeline].corpus[-1])
         faces = corpus[0]
@@ -197,26 +205,18 @@ if __name__ == "__main__":
     pl.addAcquirer(YoutubeVideoAcquirer(), 'ytvid') # Downloads a video from youtube at the highest possible quality
     pl.addMiner(FileToLineMiner(), 'fileline') # processes a file into a list of lines
     pl.addMiner(VSSChunkMiner(), 'vssminer') # processes a list of lines in VSS format into a list of SRTChunks
+    pl.addMiner(VSSChunkMiner(), 'vssminer2') # processes a list of lines in VSS format into a list of SRTChunks
     pl.addMiner(AudioSplitSpeechRecog(3, 1, 'en-US'), 'speechRecog') # processes a single audio file in wav format into a list of SRTChunks
     pl.addMiner(SRTChunkListToRIDict(), 'chunkToRIDict') # builds a reverse-indexed dict of word => list of chunks containing word
-    
+    pl.addMiner(VideoFaceFinder(), 'faceFinder') # Finds faces in the frames of a video and outputs them.
+    pl.addMiner(FaceVectoriser(), 'faceVec') # Encodes images of faces as LBP vectors.
+    pl.addMiner(FaceClusterer(n_clusters=None), 'faceClust') # Assigns faces/face vectors to clusters
+    pl.addMiner(FaceSearchMiner(faceFolder='./Frontend-Web/faces/'), 'faceSearchMine') # Formats the output from the FaceClusterer to be searchable
     pl.addMiner(TrieMiner(), 'trieminer') # Processes list of SRTChunks into a trie
     pl.addMiner(TrieMiner(), 'trieminer2') # Processes list of SRTChunks into a trie
     pl.addMiner(TrieMiner(), 'trieminer3') # Processes list of SRTChunks into a trie
     pl.addMiner(TrieMiner(), 'trieminerSR') # Processes list of SRTChunks into a trie
     pl.addSearch(TrieSearch(), 'triesearch') # searches a trie
-
-    # Face detection
-    pl.addMiner(VideoFaceFinder(), 'faceFinder') # Finds faces in the frames of a video and outputs them.
-    pl.addMiner(FaceVectoriser(), 'faceVec') # Encodes images of faces as LBP vectors.
-    pl.addMiner(FaceClusterer(n_clusters=None), 'faceClust') # Assigns faces/face vectors to clusters, k autodetermined
-    pl.addMiner(FaceClusterer(n_clusters=2), 'faceClust2') # Assigns faces/face vectors to clusters. k=2
-    pl.addMiner(FaceClusterer(n_clusters=3), 'faceClust3') # Assigns faces/face vectors to clusters. k=3
-    pl.addMiner(FaceClusterer(n_clusters=4), 'faceClust4') # Assigns faces/face vectors to clusters. k=4
-    pl.addMiner(FaceSearchMiner(faceFolder='./Frontend-Web/faces/'), 'faceSearchMine') # Formats the output from the FaceClusterer to be searchable
-    pl.addMiner(FaceSearchMiner(faceFolder='./Frontend-Web/faces/'), 'faceSearchMine2') # Formats the output from the FaceClusterer to be searchable
-    pl.addMiner(FaceSearchMiner(faceFolder='./Frontend-Web/faces/'), 'faceSearchMine3') # Formats the output from the FaceClusterer to be searchable
-    pl.addMiner(FaceSearchMiner(faceFolder='./Frontend-Web/faces/'), 'faceSearchMine4') # Formats the output from the FaceClusterer to be searchable
     pl.addSearch(FaceSearch(), 'faceSearch') # Searches faces by cluster id across a timeline
 
 
@@ -235,65 +235,56 @@ if __name__ == "__main__":
     )
     
     timelines['speechRecog'] = Timeline(
-        "Speech Recognition",
-        'ytaudio',
-        ['speechRecog', 'chunkToRIDict', 'trieminerSR'],
-        ['speechRecog', 'chunkToRIDict', 'trieminerSR'],
-        'triesearch'
+        "Speech Recognition",                   # prettyName
+        'ytaudio',                              # acqireTag
+        ['speechRecog', 'chunkToRIDict', 'trieminerSR'],         # minerTag
+        ['speechRecog', 'chunkToRIDict', 'trieminerSR'],         # corpusTag
+        'triesearch'                            # searchTag
     )
 
-    faceTimelines.append('facerecog') # mark this timeline as non-standard.
-    timelines['facerecog'] = Timeline(
-        "Facial recognition (k=auto)",
-        'ytvid',
-        ['faceFinder', 'faceVec', 'faceClust', 'faceSearchMine'],
-        ['faceFinder', 'faceVec', 'faceClust', 'faceSearchMine'],
-        'faceSearch'
-    )
-    faceTimelines.append('facerecog2') # mark this timeline as non-standard.
-    timelines['facerecog2'] = Timeline(
-        "Facial recognition (k=2)",
-        'ytvid',
-        ['faceFinder', 'faceVec', 'faceClust2', 'faceSearchMine2'],
-        ['faceFinder', 'faceVec', 'faceClust2', 'faceSearchMine2'],
-        'faceSearch'
-    )
-    faceTimelines.append('facerecog3') # mark this timeline as non-standard.
-    timelines['facerecog3'] = Timeline(
-        "Facial recognition (k=3)",
-        'ytvid',
-        ['faceFinder', 'faceVec', 'faceClust2', 'faceSearchMine3'],
-        ['faceFinder', 'faceVec', 'faceClust2', 'faceSearchMine3'],
-        'faceSearch'
-    )
-    faceTimelines.append('facerecog4') # mark this timeline as non-standard.
-    timelines['facerecog4'] = Timeline(
-        "Facial recognition (k=4)",
-        'ytvid',
-        ['faceFinder', 'faceVec', 'faceClust4', 'faceSearchMine4'],
-        ['faceFinder', 'faceVec', 'faceClust4', 'faceSearchMine4'],
-        'faceSearch'
+    timelines['subtitles2'] = Timeline(
+        "Duplicate auto subs",                 # prettyName
+        'ytautosub',                                # acquireTag
+        ['fileline', 'vssminer', 'trieminer'],  # minerTags in order
+        ['fileline', 'vssminer', 'trieminer'],  # corpusTags in order
+        'triesearch'                            # searchTag
     )
 
     timelines['fail'] = Timeline(
-        "This timeline always fails to acquire",
-        'fail',
-        ['fileline', 'vssminer', 'trieminer2'],
-        ['fileline', 'vssminer', 'trieminer2'],
-        'triesearch'
+        "This timeline always fails to acquire", # prettyName
+        'fail',                                # acquireTag
+        ['fileline', 'vssminer', 'trieminer2'],  # minerTags in order
+        ['fileline', 'vssminer', 'trieminer2'],  # corpusTags in order
+        'triesearch'                            # searchTag
     )
+    timelines['alttrieminer'] = Timeline(
+        "Secondary Trieminer",                 # prettyName
+        'ytautosub',                                # acquireTag
+        ['fileline', 'vssminer2', 'trieminer2'],  # minerTags in order
+        ['fileline', 'vssminer2', 'trieminer2'],  # corpusTags in order
+        'triesearch'                            # searchTag
+    )
+
+    faceTimelines.append('facerecog')
+    timelines['facerecog'] = Timeline()
+    timelines['facerecog'].prettyName = "Facial recognition"
+    timelines['facerecog'].acquirer = 'ytvid'
+    timelines['facerecog'].miner = ['faceFinder', 'faceVec', 'faceClust', 'faceSearchMine']
+    timelines['facerecog'].corpus = ['faceFinder', 'faceVec', 'faceClust', 'faceSearchMine']
+    timelines['facerecog'].search = 'faceSearch'
 
     # Test timelines done
 
-    # Example of complete timelines with fallthrough
+    # Examples of complete timelines with fallthrough
 
     timelines['spokenword'] = Timeline(
-        "Spoken Word [Not implemented; see code]",
+        "Spoken Word [NOT IMPLEMENTED]",
 
         # Attempts to find user-created subs, falls back to auto subs,
         # and if none exist, attempts speech recognition
 
-        ['ytautosub', 'ytspeechrec'], # outputs a VSS file to ./tmp/
+        ['ytusersub', 'ytautosub', 'ytspeechrec'], # outputs a VSS file
+                                                   # to ./tmp/
 
         # reads a VSS file into an array, processes it through VSSminer
         # and builds a searchable trie using trieminer
@@ -305,5 +296,30 @@ if __name__ == "__main__":
         # rooted on it
         'swtriesearch'
     )
+
+    timelines['speaker'] = Timeline(
+        "Speaker [NOT IMPLEMENTED]",
+
+        # Acquires source frames
+        ['ytframeextractor'], # outputs a collection of frames or short
+                              # clips in ./tmp/ rather than downloading
+                              # whole video
+
+        ['identifyfaces', 'classifyfaces'], # outputs a list of segments,
+                                            # the faces that appear in 
+                                            # them, and which appear
+                                            # to be speaking
+
+        # Alternative:
+        # ['ytvideodownloader'], # downloads entire video, requires an
+                                 # extra dataminer step for extracting
+                                 # individual frames at a given rate
+
+        # ['extractframes', identifyfaces', 'classifyfaces']
+
+        # returns list of segments containing a given named speaker
+        'facesearch'
+    )
+
 
     app.run(host='0.0.0.0', use_reloader=True, threaded=True)
